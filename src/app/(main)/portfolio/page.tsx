@@ -30,8 +30,8 @@ export default async function PortfolioPage() {
       : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-6 py-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="flex w-full flex-1 flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Link
             href="/dashboard"
@@ -50,6 +50,9 @@ export default async function PortfolioPage() {
             market value, and performance across the club portfolio.
           </p>
         </div>
+        {canManage ? (
+          <RefreshAllPricesButton lastUpdatedAt={lastUpdatedAt} />
+        ) : null}
       </div>
 
       {!holdingsResult.success ? (
@@ -59,12 +62,7 @@ export default async function PortfolioPage() {
       ) : (
         <>
           <PortfolioSummaryCards holdings={holdings} />
-          {canManage ? (
-            <>
-              <RefreshAllPricesButton lastUpdatedAt={lastUpdatedAt} />
-              <AddHoldingForm />
-            </>
-          ) : null}
+          {canManage ? <AddHoldingForm /> : null}
           <PortfolioTable holdings={holdings} isAdministrator={canManage} />
         </>
       )}

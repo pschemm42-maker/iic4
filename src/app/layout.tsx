@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "IIC4",
-  description: "Next.js application powered by Supabase and Vercel",
+  title: "IIC4 | Independent Investment Club IV",
+  description:
+    "Member platform for Independent Investment Club IV — stock investments, portfolio tracking, and club management.",
 };
 
 export default function RootLayout({
@@ -27,7 +28,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
 }
