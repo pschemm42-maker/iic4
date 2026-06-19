@@ -14,10 +14,10 @@ const cards = [
     available: true,
   },
   {
-    title: "Research",
-    description: "Share investment ideas with members.",
-    href: null,
-    available: false,
+    title: "Equity Selection",
+    description: "Share investment ideas and stock theses with members.",
+    href: "/equity-selection",
+    available: true,
   },
   {
     title: "Club admin",

@@ -38,6 +38,19 @@ export type PortfolioHoldingInput = {
   notes: string;
 };
 
+export type PortfolioHoldingUpdateInput = {
+  ticker: string;
+  companyName: string;
+  currentPrice: number | null;
+  sector: string;
+  dividendYield: number | null;
+  peRatio: number | null;
+  notes: string;
+  shares?: number;
+  costPerShare?: number;
+  purchaseDate?: string | null;
+};
+
 export type PortfolioHoldingWithMetrics = PortfolioHolding & {
   costBasis: number;
   marketValue: number | null;
@@ -53,3 +66,25 @@ export type PortfolioSummary = {
   totalGainLossPercent: number | null;
   holdingCount: number;
 };
+
+export type PortfolioPriceHistory = {
+  id: string;
+  holding_id: string;
+  ticker: string;
+  price_date: string;
+  close_price: number;
+  shares_owned: number;
+  created_at: string;
+};
+
+export type PortfolioPriceHistoryInput = {
+  holdingId: string;
+  ticker: string;
+  priceDate: string;
+  closePrice: number;
+  sharesOwned: number;
+};
+
+export function portfolioPriceHistoryValue(entry: PortfolioPriceHistory) {
+  return entry.close_price * entry.shares_owned;
+}

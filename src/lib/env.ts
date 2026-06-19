@@ -90,6 +90,10 @@ export function formatSupabaseNetworkError(error: unknown): string {
       return 'The "portfolio_purchases" table is missing. Run supabase/migrations/003_portfolio_purchases.sql in the Supabase SQL Editor, then try again.';
     }
 
+    if (message.includes("portfolio_price_history")) {
+      return 'The "portfolio_price_history" table is missing. Run supabase/migrations/004_portfolio_price_history.sql in the Supabase SQL Editor, then try again.';
+    }
+
     return 'The "profiles" table is missing. Run supabase/migrations/001_user_profiles.sql in the Supabase SQL Editor, then try again.';
   }
 

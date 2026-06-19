@@ -1,6 +1,8 @@
 "use client";
 
-import { useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { PurchaseLotsDialog } from "@/components/portfolio/purchase-lots-dialog";
+import { EditHoldingDialog } from "@/components/portfolio/edit-holding-dialog";
 import {
   formatCurrency,
   formatNumber,
@@ -10,6 +12,187 @@ import {
 } from "@/lib/portfolio/metrics";
 import { removeHolding } from "@/lib/portfolio/actions";
 import type { PortfolioHoldingWithMetrics } from "@/lib/types/portfolio";
+
+type SortColumn =
+  | "ticker"
+  | "company_name"
+  | "sector"
+  | "shares"
+  | "average_cost_per_share"
+  | "current_price"
+  | "costBasis"
+  | "marketValue"
+  | "gainLoss"
+  | "gainLossPercent"
+  | "portfolioWeight"
+  | "pe_ratio"
+  | "dividend_yield"
+  | "purchase_date";
+
+type SortDirection = "asc" | "desc";
+
+type SortableValue = string | number | null;
+
+function compareSortValues(
+  left: SortableValue,
+  right: SortableValue,
+  direction: SortDirection,
+) {
+  const multiplier = direction === "asc" ? 1 : -1;
+
+  if (left === null && right === null) {
+    return 0;
+  }
+
+  if (left === null) {
+    return 1;
+  }
+
+  if (right === null) {
+    return -1;
+  }
+
+  if (typeof left === "string" && typeof right === "string") {
+    return (
+      multiplier *
+      left.localeCompare(right, undefined, {
+        sensitivity: "base",
+        numeric: true,
+      })
+    );
+  }
+
+  return multiplier * (Number(left) - Number(right));
+}
+
+function getSortValue(
+  holding: PortfolioHoldingWithMetrics,
+  column: SortColumn,
+): SortableValue {
+  switch (column) {
+    case "ticker":
+      return holding.ticker;
+    case "company_name":
+      return holding.company_name;
+    case "sector":
+      return holding.sector || null;
+    case "shares":
+      return holding.shares;
+    case "average_cost_per_share":
+      return holding.average_cost_per_share;
+    case "current_price":
+      return holding.current_price;
+    case "costBasis":
+      return holding.costBasis;
+    case "marketValue":
+      return holding.marketValue;
+    case "gainLoss":
+      return holding.gainLoss;
+    case "gainLossPercent":
+      return holding.gainLossPercent;
+    case "portfolioWeight":
+      return holding.portfolioWeight;
+    case "pe_ratio":
+      return holding.pe_ratio;
+    case "dividend_yield":
+      return holding.dividend_yield;
+    case "purchase_date":
+      return holding.purchase_date;
+  }
+}
+
+function sortHoldings(
+  holdings: PortfolioHoldingWithMetrics[],
+  sortColumn: SortColumn,
+  sortDirection: SortDirection,
+) {
+  return [...holdings].sort((left, right) => {
+    const comparison = compareSortValues(
+      getSortValue(left, sortColumn),
+      getSortValue(right, sortColumn),
+      sortDirection,
+    );
+
+    if (comparison !== 0) {
+      return comparison;
+    }
+
+    return compareSortValues(left.ticker, right.ticker, "asc");
+  });
+}
+
+function SortIcon({
+  active,
+  direction,
+}: {
+  active: boolean;
+  direction: SortDirection;
+}) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      aria-hidden="true"
+      className={`h-3.5 w-3.5 shrink-0 transition-opacity ${active ? "text-teal-700 opacity-100 dark:text-teal-400" : "opacity-40 group-hover:opacity-70"}`}
+    >
+      {active && direction === "desc" ? (
+        <path
+          fillRule="evenodd"
+          d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+          clipRule="evenodd"
+        />
+      ) : (
+        <path
+          fillRule="evenodd"
+          d="M14.77 12.79a.75.75 0 01-1.06-.02L10 9.06l-3.71 3.71a.75.75 0 11-1.06-1.06l4.24-4.25a.75.75 0 011.06 0l4.24 4.25a.75.75 0 01-.02 1.08z"
+          clipRule="evenodd"
+        />
+      )}
+    </svg>
+  );
+}
+
+function SortableHeader({
+  label,
+  column,
+  sortColumn,
+  sortDirection,
+  onSort,
+  align = "left",
+  className,
+}: {
+  label: string;
+  column: SortColumn;
+  sortColumn: SortColumn;
+  sortDirection: SortDirection;
+  onSort: (column: SortColumn) => void;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  const isActive = sortColumn === column;
+
+  return (
+    <th
+      className={className}
+      aria-sort={
+        isActive
+          ? sortDirection === "asc"
+            ? "ascending"
+            : "descending"
+          : "none"
+      }
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className={`group inline-flex w-full items-center gap-1 font-medium transition-colors hover:text-zinc-800 dark:hover:text-zinc-200 ${align === "right" ? "justify-end" : "justify-start"} ${isActive ? "text-zinc-800 dark:text-zinc-200" : ""}`}
+      >
+        <span>{label}</span>
+        <SortIcon active={isActive} direction={sortDirection} />
+      </button>
+    </th>
+  );
+}
 
 function TrashIcon() {
   return (
@@ -28,6 +211,19 @@ function TrashIcon() {
   );
 }
 
+function PencilIcon() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      aria-hidden="true"
+      className="h-4 w-4"
+    >
+      <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+    </svg>
+  );
+}
+
 type PortfolioTableProps = {
   holdings: PortfolioHoldingWithMetrics[];
   isAdministrator: boolean;
@@ -38,6 +234,27 @@ export function PortfolioTable({
   isAdministrator,
 }: PortfolioTableProps) {
   const [isPending, startTransition] = useTransition();
+  const [selectedHolding, setSelectedHolding] =
+    useState<PortfolioHoldingWithMetrics | null>(null);
+  const [editingHolding, setEditingHolding] =
+    useState<PortfolioHoldingWithMetrics | null>(null);
+  const [sortColumn, setSortColumn] = useState<SortColumn>("ticker");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  const sortedHoldings = useMemo(
+    () => sortHoldings(holdings, sortColumn, sortDirection),
+    [holdings, sortColumn, sortDirection],
+  );
+
+  function handleSort(column: SortColumn) {
+    if (sortColumn === column) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortColumn(column);
+    setSortDirection("asc");
+  }
 
   function handleRemove(holdingId: string, ticker: string) {
     if (!confirm(`Remove ${ticker} from the portfolio?`)) {
@@ -66,31 +283,153 @@ export function PortfolioTable({
   }
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-      <table className="w-full table-fixed text-left text-sm">
+    <>
+      {editingHolding ? (
+        <EditHoldingDialog
+          holding={editingHolding}
+          onClose={() => setEditingHolding(null)}
+        />
+      ) : null}
+      {selectedHolding ? (
+        <PurchaseLotsDialog
+          holdingId={selectedHolding.id}
+          ticker={selectedHolding.ticker}
+          onClose={() => setSelectedHolding(null)}
+        />
+      ) : null}
+      <section className="rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <table className="w-full table-fixed text-left text-sm">
           <thead className="bg-zinc-50 text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
             <tr>
-              <th className="w-[4%] px-2 py-2.5 font-medium">Ticker</th>
-              <th className="w-[12%] px-2 py-2.5 font-medium">Company</th>
-              <th className="w-[8%] px-2 py-2.5 font-medium">Sector</th>
-              <th className="w-[6%] px-2 py-2.5 font-medium text-right">Shares</th>
-              <th className="w-[7%] px-2 py-2.5 font-medium text-right">Avg cost</th>
-              <th className="w-[7%] px-2 py-2.5 font-medium text-right">Current</th>
-              <th className="w-[7%] px-2 py-2.5 font-medium text-right">Cost basis</th>
-              <th className="w-[7%] px-2 py-2.5 font-medium text-right">Market value</th>
-              <th className="w-[7%] px-2 py-2.5 font-medium text-right">Gain/Loss</th>
-              <th className="w-[6%] px-2 py-2.5 font-medium text-right">Return</th>
-              <th className="w-[5%] px-2 py-2.5 font-medium text-right">Weight</th>
-              <th className="w-[5%] px-2 py-2.5 font-medium text-right">P/E</th>
-              <th className="w-[6%] px-2 py-2.5 font-medium text-right">Div yield</th>
-              <th className="w-[7%] px-2 py-2.5 font-medium">Purchased</th>
+              <SortableHeader
+                label="Ticker"
+                column="ticker"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                className="w-[4%] px-2 py-2.5"
+              />
+              <SortableHeader
+                label="Company"
+                column="company_name"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                className="w-[12%] px-2 py-2.5"
+              />
+              <SortableHeader
+                label="Sector"
+                column="sector"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                className="w-[8%] px-2 py-2.5"
+              />
+              <SortableHeader
+                label="Shares"
+                column="shares"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                align="right"
+                className="w-[6%] px-2 py-2.5"
+              />
+              <SortableHeader
+                label="Avg cost"
+                column="average_cost_per_share"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                align="right"
+                className="w-[7%] px-2 py-2.5"
+              />
+              <SortableHeader
+                label="Current"
+                column="current_price"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                align="right"
+                className="w-[7%] px-2 py-2.5"
+              />
+              <SortableHeader
+                label="Cost basis"
+                column="costBasis"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                align="right"
+                className="w-[7%] px-2 py-2.5"
+              />
+              <SortableHeader
+                label="Market value"
+                column="marketValue"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                align="right"
+                className="w-[7%] px-2 py-2.5"
+              />
+              <SortableHeader
+                label="Gain/Loss"
+                column="gainLoss"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                align="right"
+                className="w-[7%] px-2 py-2.5"
+              />
+              <SortableHeader
+                label="Return"
+                column="gainLossPercent"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                align="right"
+                className="w-[6%] px-2 py-2.5"
+              />
+              <SortableHeader
+                label="Weight"
+                column="portfolioWeight"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                align="right"
+                className="w-[5%] px-2 py-2.5"
+              />
+              <SortableHeader
+                label="P/E"
+                column="pe_ratio"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                align="right"
+                className="w-[5%] px-2 py-2.5"
+              />
+              <SortableHeader
+                label="Div yield"
+                column="dividend_yield"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                align="right"
+                className="w-[6%] px-2 py-2.5"
+              />
+              <SortableHeader
+                label="Purchased"
+                column="purchase_date"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                className="w-[7%] px-2 py-2.5"
+              />
               {isAdministrator ? (
-                <th className="w-[4%] px-2 py-2.5 font-medium">Actions</th>
+                <th className="w-[6%] px-2 py-2.5 font-medium">Actions</th>
               ) : null}
             </tr>
           </thead>
           <tbody>
-            {holdings.map((holding) => (
+            {sortedHoldings.map((holding) => (
               <tr
                 key={holding.id}
                 className="border-t border-zinc-200 dark:border-zinc-800"
@@ -111,8 +450,15 @@ export function PortfolioTable({
                 <td className="truncate px-2 py-2.5 text-zinc-600 dark:text-zinc-400" title={holding.sector || undefined}>
                   {holding.sector || "—"}
                 </td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
-                  {formatNumber(holding.shares, 4)}
+                <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHolding(holding)}
+                    title="View purchase lots"
+                    className="rounded px-1 py-0.5 text-zinc-700 underline decoration-zinc-300 underline-offset-2 transition-colors hover:text-teal-700 hover:decoration-teal-500 dark:text-zinc-300 dark:decoration-zinc-600 dark:hover:text-teal-400 dark:hover:decoration-teal-600"
+                  >
+                    {formatNumber(holding.shares, 4)}
+                  </button>
                 </td>
                 <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                   {formatCurrency(holding.average_cost_per_share)}
@@ -163,21 +509,33 @@ export function PortfolioTable({
                 </td>
                 {isAdministrator ? (
                   <td className="px-2 py-2.5">
-                    <button
-                      type="button"
-                      disabled={isPending}
-                      onClick={() => handleRemove(holding.id, holding.ticker)}
-                      aria-label={`Remove ${holding.ticker} from portfolio`}
-                      className="rounded-md border border-red-300 p-1.5 text-red-700 transition-colors hover:bg-red-50 disabled:opacity-60 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40"
-                    >
-                      <TrashIcon />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => setEditingHolding(holding)}
+                        aria-label={`Edit ${holding.ticker}`}
+                        className="rounded-md border border-zinc-300 p-1.5 text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      >
+                        <PencilIcon />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => handleRemove(holding.id, holding.ticker)}
+                        aria-label={`Remove ${holding.ticker} from portfolio`}
+                        className="rounded-md border border-red-300 p-1.5 text-red-700 transition-colors hover:bg-red-50 disabled:opacity-60 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
                   </td>
                 ) : null}
               </tr>
             ))}
           </tbody>
         </table>
-    </section>
+      </section>
+    </>
   );
 }

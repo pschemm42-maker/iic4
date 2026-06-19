@@ -12,6 +12,10 @@ import { createClient } from "@/lib/supabase/server";
 import type {
   PortfolioHolding,
   PortfolioHoldingInput,
+  PortfolioHoldingUpdateInput,
+  PortfolioPriceHistory,
+  PortfolioPriceHistoryInput,
+  PortfolioPurchase,
 } from "@/lib/types/portfolio";
 
 export type PortfolioActionResult<T = undefined> =
@@ -95,6 +99,55 @@ function parseHoldingInput(formData: FormData): PortfolioHoldingInput | null {
     peRatio,
     notes,
   };
+}
+
+function parseHoldingUpdateInput(
+  formData: FormData,
+): PortfolioHoldingUpdateInput | null {
+  const ticker = String(formData.get("ticker") ?? "")
+    .trim()
+    .toUpperCase();
+  const companyName = String(formData.get("companyName") ?? "").trim();
+  const currentPrice = parseOptionalNumber(formData.get("currentPrice"));
+  const sector = String(formData.get("sector") ?? "").trim();
+  const purchaseDateRaw = String(formData.get("purchaseDate") ?? "").trim();
+  const dividendYield = parseOptionalNumber(formData.get("dividendYield"));
+  const peRatio = parseOptionalNumber(formData.get("peRatio"));
+  const notes = String(formData.get("notes") ?? "").trim();
+  const editPosition = formData.get("editPosition") === "true";
+
+  if (!ticker || !companyName) {
+    return null;
+  }
+
+  const input: PortfolioHoldingUpdateInput = {
+    ticker,
+    companyName,
+    currentPrice,
+    sector,
+    dividendYield,
+    peRatio,
+    notes,
+  };
+
+  if (editPosition) {
+    const shares = Number(formData.get("shares"));
+    const costPerShare = Number(formData.get("costPerShare"));
+
+    if (!Number.isFinite(shares) || shares <= 0) {
+      return null;
+    }
+
+    if (!Number.isFinite(costPerShare) || costPerShare < 0) {
+      return null;
+    }
+
+    input.shares = shares;
+    input.costPerShare = costPerShare;
+    input.purchaseDate = purchaseDateRaw || null;
+  }
+
+  return input;
 }
 
 export async function listHoldings(): Promise<
@@ -283,6 +336,275 @@ export async function addHolding(
       data: mapHoldingRow(finalHolding as HoldingRow),
       message: `Purchase added to ${input.ticker}. Position now ${nextShares} shares at $${nextAverageCost.toFixed(2)} avg cost.`,
     };
+  } catch (error) {
+    return {
+      success: false,
+      error: formatSupabaseNetworkError(error),
+    };
+  }
+}
+
+export async function updateHolding(
+  holdingId: string,
+  formData: FormData,
+): Promise<PortfolioActionResult<PortfolioHolding>> {
+  const authError = await assertAdministrator();
+  if (authError) {
+    return authError;
+  }
+
+  if (!holdingId) {
+    return { success: false, error: "Holding is required." };
+  }
+
+  const input = parseHoldingUpdateInput(formData);
+  if (!input) {
+    return {
+      success: false,
+      error: "Ticker, company name, and valid position values are required.",
+    };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: existingHolding, error: lookupError } = await supabase
+      .from("portfolio_holdings")
+      .select("*, portfolio_purchases(count)")
+      .eq("id", holdingId)
+      .maybeSingle();
+
+    if (lookupError) {
+      return { success: false, error: formatSupabaseNetworkError(lookupError) };
+    }
+
+    if (!existingHolding) {
+      return { success: false, error: "Holding not found." };
+    }
+
+    const existing = mapHoldingRow(existingHolding as HoldingRow);
+
+    if (input.ticker !== existing.ticker) {
+      const { data: conflictingHolding, error: conflictError } = await supabase
+        .from("portfolio_holdings")
+        .select("id")
+        .eq("ticker", input.ticker)
+        .neq("id", holdingId)
+        .maybeSingle();
+
+      if (conflictError) {
+        return { success: false, error: formatSupabaseNetworkError(conflictError) };
+      }
+
+      if (conflictingHolding) {
+        return {
+          success: false,
+          error: `${input.ticker} already exists in the portfolio.`,
+        };
+      }
+    }
+
+    const holdingUpdates: Record<string, string | number | null> = {
+      ticker: input.ticker,
+      company_name: input.companyName,
+      sector: input.sector,
+      current_price: input.currentPrice,
+      dividend_yield: input.dividendYield,
+      pe_ratio: input.peRatio,
+      notes: input.notes,
+    };
+
+    if (input.shares !== undefined && input.costPerShare !== undefined) {
+      holdingUpdates.shares = input.shares;
+      holdingUpdates.average_cost_per_share = input.costPerShare;
+      holdingUpdates.purchase_date = input.purchaseDate ?? null;
+    }
+
+    const { error: updateError } = await supabase
+      .from("portfolio_holdings")
+      .update(holdingUpdates)
+      .eq("id", holdingId);
+
+    if (updateError) {
+      return { success: false, error: formatSupabaseNetworkError(updateError) };
+    }
+
+    if (input.shares !== undefined && input.costPerShare !== undefined) {
+      const { data: purchases, error: purchasesError } = await supabase
+        .from("portfolio_purchases")
+        .select("id")
+        .eq("holding_id", holdingId)
+        .order("created_at", { ascending: true });
+
+      if (purchasesError) {
+        return {
+          success: false,
+          error: formatSupabaseNetworkError(purchasesError),
+        };
+      }
+
+      if (purchases && purchases.length === 1) {
+        const { error: purchaseUpdateError } = await supabase
+          .from("portfolio_purchases")
+          .update({
+            shares: input.shares,
+            cost_per_share: input.costPerShare,
+            purchase_date: input.purchaseDate ?? null,
+            notes: input.notes,
+          })
+          .eq("id", purchases[0].id);
+
+        if (purchaseUpdateError) {
+          return {
+            success: false,
+            error: formatSupabaseNetworkError(purchaseUpdateError),
+          };
+        }
+      }
+    }
+
+    const { data: finalHolding, error: finalError } = await supabase
+      .from("portfolio_holdings")
+      .select("*, portfolio_purchases(count)")
+      .eq("id", holdingId)
+      .single();
+
+    if (finalError) {
+      return { success: false, error: formatSupabaseNetworkError(finalError) };
+    }
+
+    revalidatePath("/portfolio");
+
+    return {
+      success: true,
+      data: mapHoldingRow(finalHolding as HoldingRow),
+      message: `${input.ticker} updated.`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: formatSupabaseNetworkError(error),
+    };
+  }
+}
+
+export async function listPurchasesForHolding(
+  holdingId: string,
+): Promise<PortfolioActionResult<PortfolioPurchase[]>> {
+  if (!holdingId) {
+    return { success: false, error: "Holding is required." };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("portfolio_purchases")
+      .select("*")
+      .eq("holding_id", holdingId)
+      .order("purchase_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      return { success: false, error: formatSupabaseNetworkError(error) };
+    }
+
+    return { success: true, data: data as PortfolioPurchase[] };
+  } catch (error) {
+    return {
+      success: false,
+      error: formatSupabaseNetworkError(error),
+    };
+  }
+}
+
+export async function listPriceHistory(options?: {
+  holdingId?: string;
+  ticker?: string;
+  fromDate?: string;
+  toDate?: string;
+}): Promise<PortfolioActionResult<PortfolioPriceHistory[]>> {
+  try {
+    const supabase = await createClient();
+    let query = supabase
+      .from("portfolio_price_history")
+      .select("*")
+      .order("price_date", { ascending: false });
+
+    if (options?.holdingId) {
+      query = query.eq("holding_id", options.holdingId);
+    }
+
+    if (options?.ticker) {
+      query = query.eq("ticker", options.ticker.trim().toUpperCase());
+    }
+
+    if (options?.fromDate) {
+      query = query.gte("price_date", options.fromDate);
+    }
+
+    if (options?.toDate) {
+      query = query.lte("price_date", options.toDate);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      return { success: false, error: formatSupabaseNetworkError(error) };
+    }
+
+    return { success: true, data: data as PortfolioPriceHistory[] };
+  } catch (error) {
+    return {
+      success: false,
+      error: formatSupabaseNetworkError(error),
+    };
+  }
+}
+
+export async function upsertPriceHistoryEntry(
+  input: PortfolioPriceHistoryInput,
+): Promise<PortfolioActionResult<PortfolioPriceHistory>> {
+  const authError = await assertAdministrator();
+  if (authError) {
+    return authError;
+  }
+
+  if (!input.holdingId || !input.ticker.trim() || !input.priceDate) {
+    return {
+      success: false,
+      error: "Holding, ticker, and price date are required.",
+    };
+  }
+
+  if (!Number.isFinite(input.closePrice) || input.closePrice < 0) {
+    return { success: false, error: "Close price must be zero or greater." };
+  }
+
+  if (!Number.isFinite(input.sharesOwned) || input.sharesOwned < 0) {
+    return { success: false, error: "Shares owned must be zero or greater." };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("portfolio_price_history")
+      .upsert(
+        {
+          holding_id: input.holdingId,
+          ticker: input.ticker.trim().toUpperCase(),
+          price_date: input.priceDate,
+          close_price: input.closePrice,
+          shares_owned: input.sharesOwned,
+        },
+        { onConflict: "holding_id,price_date" },
+      )
+      .select("*")
+      .single();
+
+    if (error) {
+      return { success: false, error: formatSupabaseNetworkError(error) };
+    }
+
+    return { success: true, data: data as PortfolioPriceHistory };
   } catch (error) {
     return {
       success: false,
