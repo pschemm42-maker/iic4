@@ -2,10 +2,15 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { updateUser } from "@/lib/users/actions";
+import {
+  sendInvite,
+  sendPasswordReset,
+  updateUser,
+} from "@/lib/users/actions";
 import {
   USER_ROLES,
   formatUserRole,
+  formatUserStatus,
   type UserProfile,
   type UserRole,
 } from "@/lib/types/user";
@@ -35,6 +40,25 @@ export function EditUserForm({ user }: EditUserFormProps) {
     });
   }
 
+  function runUserAction(
+    action: () => Promise<{ success: boolean; error?: string }>,
+    successMessage: string,
+  ) {
+    setMessage(null);
+    setError(null);
+
+    startTransition(async () => {
+      const result = await action();
+
+      if (result.success) {
+        setMessage(successMessage);
+        return;
+      }
+
+      setError(result.error ?? "Something went wrong.");
+    });
+  }
+
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mb-6 flex items-start justify-between gap-4">
@@ -43,7 +67,7 @@ export function EditUserForm({ user }: EditUserFormProps) {
             Edit user
           </h1>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Update profile details and role assignment.
+            Update profile details, send invites, or reset the user&apos;s password.
           </p>
         </div>
         <Link
@@ -52,6 +76,59 @@ export function EditUserForm({ user }: EditUserFormProps) {
         >
           Back to users
         </Link>
+      </div>
+
+      <div className="mb-6 flex flex-wrap items-center gap-3 text-sm">
+        <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+          {formatUserStatus(user.status)}
+        </span>
+        {user.status === "pending" ? (
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() =>
+              runUserAction(
+                async () => sendInvite(user.id),
+                `Invite sent to ${user.email}.`,
+              )
+            }
+            className="rounded-lg border border-sky-300 px-3 py-1.5 text-sm font-medium text-sky-700 transition-colors hover:bg-sky-50 disabled:opacity-60 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950/40"
+          >
+            Send invite
+          </button>
+        ) : null}
+        {user.status === "invited" ? (
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() =>
+              runUserAction(
+                async () => sendInvite(user.id),
+                `Invite resent to ${user.email}.`,
+              )
+            }
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Resend invite
+          </button>
+        ) : null}
+        {user.status === "active" ? (
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => {
+              if (confirm(`Send a password reset email to ${user.email}?`)) {
+                runUserAction(
+                  async () => sendPasswordReset(user.id),
+                  `Password reset email sent to ${user.email}.`,
+                );
+              }
+            }}
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Reset password
+          </button>
+        ) : null}
       </div>
 
       <form action={handleSubmit} className="grid max-w-xl gap-4">
@@ -76,7 +153,8 @@ export function EditUserForm({ user }: EditUserFormProps) {
             type="text"
             required
             defaultValue={user.full_name}
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-950 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+            disabled={isPending}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-950 outline-none ring-emerald-500 focus:ring-2 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
           />
         </label>
 
@@ -89,7 +167,8 @@ export function EditUserForm({ user }: EditUserFormProps) {
           <select
             name="role"
             defaultValue={user.role}
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-950 outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+            disabled={isPending}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-950 outline-none ring-emerald-500 focus:ring-2 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
           >
             {USER_ROLES.map((role) => (
               <option key={role} value={role}>

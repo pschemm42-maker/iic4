@@ -29,3 +29,35 @@ export function earliestPurchaseDate(
 
   return existingDate <= newDate ? existingDate : newDate;
 }
+
+export type PurchaseLotValues = {
+  shares: number;
+  cost_per_share: number;
+  purchase_date: string | null;
+};
+
+export function aggregateHoldingsFromPurchases(purchases: PurchaseLotValues[]) {
+  if (purchases.length === 0) {
+    return {
+      shares: 0,
+      averageCostPerShare: 0,
+      purchaseDate: null,
+    };
+  }
+
+  let totalShares = 0;
+  let totalCost = 0;
+  let purchaseDate: string | null = null;
+
+  for (const purchase of purchases) {
+    totalShares += purchase.shares;
+    totalCost += purchase.shares * purchase.cost_per_share;
+    purchaseDate = earliestPurchaseDate(purchaseDate, purchase.purchase_date);
+  }
+
+  return {
+    shares: totalShares,
+    averageCostPerShare: totalShares > 0 ? totalCost / totalShares : 0,
+    purchaseDate,
+  };
+}

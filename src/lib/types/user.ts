@@ -2,7 +2,7 @@ export const USER_ROLES = ["administrator", "user"] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
 
-export const USER_STATUSES = ["invited", "active", "disabled"] as const;
+export const USER_STATUSES = ["pending", "invited", "active", "disabled"] as const;
 
 export type UserStatus = (typeof USER_STATUSES)[number];
 
@@ -28,6 +28,8 @@ export function formatUserRole(role: UserRole) {
 
 export function formatUserStatus(status: UserStatus) {
   switch (status) {
+    case "pending":
+      return "Pending";
     case "invited":
       return "Invited";
     case "active":

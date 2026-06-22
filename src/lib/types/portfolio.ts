@@ -38,6 +38,13 @@ export type PortfolioHoldingInput = {
   notes: string;
 };
 
+export type PortfolioPurchaseUpdateInput = {
+  shares: number;
+  costPerShare: number;
+  purchaseDate: string | null;
+  notes: string;
+};
+
 export type PortfolioHoldingUpdateInput = {
   ticker: string;
   companyName: string;

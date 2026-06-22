@@ -227,9 +227,9 @@ export function EditHoldingDialog({ holding, onClose }: EditHoldingDialogProps) 
 
           {!canEditPosition ? (
             <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-              Shares, cost, and purchase date are read-only for positions with
-              multiple purchase lots. Click the shares value in the table to
-              review individual lots.
+              Shares, cost, and purchase date are managed per lot for positions
+              with multiple purchases. Click the shares value in the table to
+              view and edit individual lots.
             </p>
           ) : null}
 

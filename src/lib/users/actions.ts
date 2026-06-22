@@ -25,6 +25,56 @@ function getInviteRedirectUrl() {
   return `${getSiteUrl()}/auth/confirm?next=/auth/set-password`;
 }
 
+function getPasswordResetRedirectUrl() {
+  return `${getSiteUrl()}/auth/confirm?next=/auth/set-password`;
+}
+
+async function assertAdminWithCredentials(): Promise<
+  ActionResult | { supabase: ReturnType<typeof createAdminClient> }
+> {
+  const authError = await assertAdministrator();
+  if (authError) {
+    return authError;
+  }
+
+  const configError = getSupabaseConfigError();
+  if (configError) {
+    return { success: false, error: configError };
+  }
+
+  if (!hasAdminCredentials()) {
+    return {
+      success: false,
+      error:
+        "Add SUPABASE_SERVICE_ROLE_KEY to .env.local to manage users.",
+    };
+  }
+
+  return { supabase: createAdminClient() };
+}
+
+async function upsertUserProfile(
+  supabase: ReturnType<typeof createAdminClient>,
+  userId: string,
+  input: UserFormInput,
+  status: UserStatus,
+) {
+  return supabase
+    .from("profiles")
+    .upsert(
+      {
+        id: userId,
+        email: input.email,
+        full_name: input.fullName,
+        role: input.role,
+        status,
+      },
+      { onConflict: "id" },
+    )
+    .select("*")
+    .single();
+}
+
 function parseUserForm(formData: FormData): UserFormInput | null {
   const email = String(formData.get("email") ?? "")
     .trim()
@@ -96,6 +146,67 @@ export async function listUsers(): Promise<ActionResult<UserProfile[]>> {
   }
 }
 
+export async function createUser(
+  formData: FormData,
+): Promise<ActionResult<UserProfile>> {
+  const input = parseUserForm(formData);
+
+  if (!input) {
+    return { success: false, error: "Email, name, and role are required." };
+  }
+
+  const adminResult = await assertAdminWithCredentials();
+  if ("success" in adminResult) {
+    return adminResult;
+  }
+
+  try {
+    const { supabase } = adminResult;
+    const { data: createData, error: createError } =
+      await supabase.auth.admin.createUser({
+        email: input.email,
+        email_confirm: false,
+        user_metadata: {
+          full_name: input.fullName,
+          role: input.role,
+        },
+      });
+
+    if (createError) {
+      return { success: false, error: createError.message };
+    }
+
+    const userId = createData.user?.id;
+
+    if (!userId) {
+      return { success: false, error: "User was created but id was missing." };
+    }
+
+    const { data: profile, error: profileError } = await upsertUserProfile(
+      supabase,
+      userId,
+      input,
+      "pending",
+    );
+
+    if (profileError) {
+      const message = profileError.message.includes("invalid input value for enum")
+        ? "Database migration required: run supabase/migrations/013_user_status_pending.sql in Supabase."
+        : profileError.message;
+      return { success: false, error: message };
+    }
+
+    revalidatePath("/users");
+
+    return { success: true, data: profile as UserProfile };
+  } catch (error) {
+    return {
+      success: false,
+      error: formatSupabaseNetworkError(error),
+    };
+  }
+}
+
 export async function inviteUser(
   formData: FormData,
 ): Promise<ActionResult<UserProfile>> {
@@ -105,26 +216,13 @@ export async function inviteUser(
     return { success: false, error: "Email, name, and role are required." };
   }
 
-  const authError = await assertAdministrator();
-  if (authError) {
-    return authError;
-  }
-
-  const configError = getSupabaseConfigError();
-  if (configError) {
-    return { success: false, error: configError };
-  }
-
-  if (!hasAdminCredentials()) {
-    return {
-      success: false,
-      error:
-        "Add SUPABASE_SERVICE_ROLE_KEY to .env.local to invite users.",
-    };
+  const adminResult = await assertAdminWithCredentials();
+  if ("success" in adminResult) {
+    return adminResult;
   }
 
   try {
-    const supabase = createAdminClient();
+    const { supabase } = adminResult;
     const redirectTo = getInviteRedirectUrl();
 
     const { data: inviteData, error: inviteError } =
@@ -146,20 +244,12 @@ export async function inviteUser(
       return { success: false, error: "Invite sent but user id was missing." };
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .upsert(
-        {
-          id: userId,
-          email: input.email,
-          full_name: input.fullName,
-          role: input.role,
-          status: "invited",
-        },
-        { onConflict: "id" },
-      )
-      .select("*")
-      .single();
+    const { data: profile, error: profileError } = await upsertUserProfile(
+      supabase,
+      userId,
+      input,
+      "invited",
+    );
 
     if (profileError) {
       return { success: false, error: profileError.message };
@@ -317,30 +407,29 @@ export async function deleteUser(userId: string): Promise<ActionResult> {
   }
 }
 
-export async function resendInvite(userId: string): Promise<ActionResult> {
-  const authError = await assertAdministrator();
-  if (authError) {
-    return authError;
-  }
-
-  if (!hasAdminCredentials()) {
-    return {
-      success: false,
-      error:
-        "Add SUPABASE_SERVICE_ROLE_KEY to .env.local to resend invites.",
-    };
+export async function sendInvite(userId: string): Promise<ActionResult> {
+  const adminResult = await assertAdminWithCredentials();
+  if ("success" in adminResult) {
+    return adminResult;
   }
 
   try {
-    const supabase = createAdminClient();
+    const { supabase } = adminResult;
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("email, full_name, role")
+      .select("email, full_name, role, status")
       .eq("id", userId)
       .single();
 
     if (profileError || !profile) {
       return { success: false, error: "User not found." };
+    }
+
+    if (profile.status === "active") {
+      return {
+        success: false,
+        error: "This user has already joined. Use reset password instead.",
+      };
     }
 
     const { error } = await supabase.auth.admin.inviteUserByEmail(
@@ -364,13 +453,132 @@ export async function resendInvite(userId: string): Promise<ActionResult> {
       .eq("id", userId);
 
     revalidatePath("/users");
+    revalidatePath(`/users/${userId}/edit`);
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send invite.",
+    };
+  }
+}
+
+export async function resendInvite(userId: string): Promise<ActionResult> {
+  return sendInvite(userId);
+}
+
+export async function inviteAllPendingUsers(): Promise<
+  ActionResult<{ invitedCount: number }>
+> {
+  const adminResult = await assertAdminWithCredentials();
+  if ("success" in adminResult) {
+    return adminResult;
+  }
+
+  try {
+    const { supabase } = adminResult;
+    const { data: pendingUsers, error: listError } = await supabase
+      .from("profiles")
+      .select("id, email")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true });
+
+    if (listError) {
+      if (listError.message.includes("invalid input value for enum")) {
+        return {
+          success: false,
+          error:
+            "Database migration required: run supabase/migrations/013_user_status_pending.sql in Supabase.",
+        };
+      }
+
+      return { success: false, error: formatSupabaseNetworkError(listError) };
+    }
+
+    if (!pendingUsers || pendingUsers.length === 0) {
+      return {
+        success: false,
+        error: "No pending members to invite.",
+      };
+    }
+
+    let invitedCount = 0;
+    const errors: string[] = [];
+
+    for (const pendingUser of pendingUsers) {
+      const result = await sendInvite(pendingUser.id);
+
+      if (result.success) {
+        invitedCount += 1;
+        continue;
+      }
+
+      if (result.error) {
+        errors.push(`${pendingUser.email}: ${result.error}`);
+      }
+    }
+
+    revalidatePath("/users");
+
+    if (invitedCount === 0) {
+      return {
+        success: false,
+        error: errors[0] ?? "Failed to send invites.",
+      };
+    }
+
+    return { success: true, data: { invitedCount } };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to invite pending members.",
+    };
+  }
+}
+
+export async function sendPasswordReset(userId: string): Promise<ActionResult> {
+  const adminResult = await assertAdminWithCredentials();
+  if ("success" in adminResult) {
+    return adminResult;
+  }
+
+  try {
+    const { supabase } = adminResult;
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("email, status")
+      .eq("id", userId)
+      .single();
+
+    if (profileError || !profile) {
+      return { success: false, error: "User not found." };
+    }
+
+    if (profile.status !== "active") {
+      return {
+        success: false,
+        error: "Send an invite first so the user can set their password.",
+      };
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(profile.email, {
+      redirectTo: getPasswordResetRedirectUrl(),
+    });
+
+    if (error) {
+      return { success: false, error: formatSupabaseNetworkError(error) };
+    }
 
     return { success: true };
   } catch (error) {
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : "Failed to resend invite.",
+        error instanceof Error ? error.message : "Failed to send password reset.",
     };
   }
 }

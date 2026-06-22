@@ -43,6 +43,28 @@ export function getFinnhubApiKey() {
   return key;
 }
 
+export function getGeminiApiKey() {
+  const key = process.env.GEMINI_API_KEY?.trim() || "";
+
+  if (key === "your-gemini-api-key") {
+    return "";
+  }
+
+  return key;
+}
+
+export function isGeminiConfigured() {
+  return Boolean(getGeminiApiKey());
+}
+
+export function getGeminiModelFlash() {
+  return process.env.GEMINI_MODEL_FLASH?.trim() || "gemini-2.5-flash";
+}
+
+export function getGeminiModelPro() {
+  return process.env.GEMINI_MODEL_PRO?.trim() || "gemini-2.5-pro";
+}
+
 export function getSiteUrl() {
   if (process.env.NEXT_PUBLIC_SITE_URL) {
     return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
@@ -92,6 +114,14 @@ export function formatSupabaseNetworkError(error: unknown): string {
 
     if (message.includes("portfolio_price_history")) {
       return 'The "portfolio_price_history" table is missing. Run supabase/migrations/004_portfolio_price_history.sql in the Supabase SQL Editor, then try again.';
+    }
+
+    if (message.includes("stock_suggestions")) {
+      return 'The "stock_suggestions" table is missing. Run supabase/migrations/005_stock_suggestions.sql in the Supabase SQL Editor, then try again.';
+    }
+
+    if (message.includes("stock_suggestion_research")) {
+      return 'The "stock_suggestion_research" table is missing. Run supabase/migrations/008_stock_suggestion_research.sql in the Supabase SQL Editor, then try again.';
     }
 
     return 'The "profiles" table is missing. Run supabase/migrations/001_user_profiles.sql in the Supabase SQL Editor, then try again.';

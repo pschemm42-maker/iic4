@@ -1,9 +1,11 @@
 import { getFinnhubApiKey } from "@/lib/env";
 import type {
   BatchQuoteResult,
+  FinancialMetrics,
   FinnhubResult,
   HoldingMarketData,
   QuoteResult,
+  RecommendationTrendPeriod,
 } from "@/lib/market/types";
 
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
@@ -146,6 +148,140 @@ export async function fetchMetrics(
   return { success: true, data: { peRatio, dividendYield } };
 }
 
+type FinnhubMetricRecord = Record<string, number | string | null | undefined>;
+
+function readMetric(
+  metric: FinnhubMetricRecord,
+  keys: string[],
+  options: { min?: number; max?: number } = {},
+): number | null {
+  for (const key of keys) {
+    const raw = metric[key];
+    if (typeof raw !== "number" || !Number.isFinite(raw)) {
+      continue;
+    }
+
+    if (options.min !== undefined && raw < options.min) {
+      continue;
+    }
+
+    if (options.max !== undefined && raw > options.max) {
+      continue;
+    }
+
+    return raw;
+  }
+
+  return null;
+}
+
+async function fetchSharesOutstanding(symbol: string): Promise<number | null> {
+  const response = await finnhubFetch(
+    `/stock/profile2?symbol=${encodeURIComponent(symbol)}`,
+  );
+
+  if (!response.success) {
+    return null;
+  }
+
+  const data = (await response.data.json()) as { shareOutstanding?: number };
+  return typeof data.shareOutstanding === "number" &&
+    Number.isFinite(data.shareOutstanding) &&
+    data.shareOutstanding > 0
+    ? data.shareOutstanding
+    : null;
+}
+
+export async function fetchFinancialMetrics(
+  ticker: string,
+): Promise<FinnhubResult<FinancialMetrics>> {
+  const symbol = normalizeTicker(ticker);
+  const [response, sharesOutstanding] = await Promise.all([
+    finnhubFetch(`/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`),
+    fetchSharesOutstanding(symbol),
+  ]);
+
+  if (!response.success) {
+    return response;
+  }
+
+  const data = (await response.data.json()) as { metric?: FinnhubMetricRecord };
+  const metric = data.metric ?? {};
+
+  const revenuePerShareTTM = readMetric(metric, [
+    "revenuePerShareTTM",
+    "revenuePerShareAnnual",
+  ]);
+
+  // Absolute revenue (millions USD): rev/share ($) x shares (millions).
+  const revenueTTM =
+    revenuePerShareTTM !== null && sharesOutstanding !== null
+      ? revenuePerShareTTM * sharesOutstanding
+      : null;
+
+  const metrics: FinancialMetrics = {
+    marketCapitalization: readMetric(metric, ["marketCapitalization"], {
+      min: 0,
+    }),
+    revenueTTM,
+    revenuePerShareTTM,
+    peTTM: readMetric(metric, ["peTTM", "peBasicExclExtraTTM", "peAnnual"]),
+    psTTM: readMetric(metric, ["psTTM", "psAnnual"], { min: 0 }),
+    pbRatio: readMetric(metric, ["pbQuarterly", "pbAnnual", "pb"], { min: 0 }),
+    pfcfShareTTM: readMetric(metric, ["pfcfShareTTM", "pfcfShareAnnual"]),
+    grossMarginTTM: readMetric(metric, ["grossMarginTTM", "grossMarginAnnual"]),
+    operatingMarginTTM: readMetric(metric, [
+      "operatingMarginTTM",
+      "operatingMarginAnnual",
+    ]),
+    netProfitMarginTTM: readMetric(metric, [
+      "netProfitMarginTTM",
+      "netProfitMarginAnnual",
+    ]),
+    roeTTM: readMetric(metric, ["roeTTM", "roeRfy", "roeAnnual"]),
+    roaTTM: readMetric(metric, ["roaTTM", "roaRfy", "roaAnnual"]),
+    revenueGrowthTTMYoy: readMetric(metric, [
+      "revenueGrowthTTMYoy",
+      "revenueGrowthQuarterlyYoy",
+    ]),
+    revenueGrowth5Y: readMetric(metric, ["revenueGrowth5Y", "revenueGrowth3Y"]),
+    epsGrowthTTMYoy: readMetric(metric, [
+      "epsGrowthTTMYoy",
+      "epsGrowthQuarterlyYoy",
+    ]),
+    epsGrowth5Y: readMetric(metric, ["epsGrowth5Y", "epsGrowth3Y"]),
+    currentRatio: readMetric(metric, [
+      "currentRatioQuarterly",
+      "currentRatioAnnual",
+    ], { min: 0 }),
+    debtToEquity: readMetric(metric, [
+      "totalDebt/totalEquityQuarterly",
+      "totalDebt/totalEquityAnnual",
+      "longTermDebt/equityQuarterly",
+      "longTermDebt/equityAnnual",
+    ]),
+    netInterestCoverageTTM: readMetric(metric, [
+      "netInterestCoverageTTM",
+      "netInterestCoverageAnnual",
+    ]),
+    beta: readMetric(metric, ["beta"]),
+    priceReturn52Week: readMetric(metric, [
+      "52WeekPriceReturnDaily",
+      "yearToDatePriceReturnDaily",
+    ]),
+    dividendYieldIndicatedAnnual: readMetric(
+      metric,
+      ["dividendYieldIndicatedAnnual", "currentDividendYieldTTM"],
+      { min: 0 },
+    ),
+    payoutRatioTTM: readMetric(metric, ["payoutRatioTTM", "payoutRatioAnnual"], {
+      min: 0,
+    }),
+  };
+
+  return { success: true, data: metrics };
+}
+
 export async function fetchHoldingStats(
   ticker: string,
 ): Promise<FinnhubResult<HoldingMarketData>> {
@@ -223,4 +359,28 @@ export async function fetchQuotesBatched(
   }
 
   return { success: true, data: { succeeded, failed } };
+}
+
+export async function fetchRecommendationTrends(
+  ticker: string,
+): Promise<FinnhubResult<RecommendationTrendPeriod[]>> {
+  const symbol = normalizeTicker(ticker);
+  const response = await finnhubFetch(
+    `/stock/recommendation?symbol=${encodeURIComponent(symbol)}`,
+  );
+
+  if (!response.success) {
+    return response;
+  }
+
+  const data = (await response.data.json()) as RecommendationTrendPeriod[];
+
+  if (!Array.isArray(data) || data.length === 0) {
+    return {
+      success: false,
+      error: `No analyst recommendation trends found for ${symbol}.`,
+    };
+  }
+
+  return { success: true, data };
 }

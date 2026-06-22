@@ -14,7 +14,7 @@ export default async function SetPasswordPage() {
   return (
     <AuthShell
       title="Set your password"
-      description="Create a password to finish setting up your member account."
+      description="Create or reset your password to access your member account."
     >
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading...</p>}>
         <SetPasswordForm />

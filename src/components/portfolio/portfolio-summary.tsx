@@ -1,3 +1,4 @@
+import { BrandStatCard } from "@/components/brand/brand-card";
 import {
   calculatePortfolioSummary,
   formatCurrency,
@@ -30,21 +31,14 @@ export function PortfolioSummaryCards({ holdings }: PortfolioSummaryCardsProps) 
   ];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {cards.map((card) => (
-        <div
+        <BrandStatCard
           key={card.label}
-          className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
-        >
-          <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-            {card.label}
-          </p>
-          <p
-            className={`mt-2 text-xl font-semibold tabular-nums text-zinc-950 dark:text-zinc-50 ${card.valueClassName ?? ""}`}
-          >
-            {card.value}
-          </p>
-        </div>
+          label={card.label}
+          value={card.value}
+          valueClassName={card.valueClassName}
+        />
       ))}
     </div>
   );

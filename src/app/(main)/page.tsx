@@ -63,8 +63,8 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-6xl px-6 py-16">
-        <div className="grid gap-6 md:grid-cols-3">
+      <section className="mx-auto w-full max-w-6xl px-6 py-12">
+        <div className="grid gap-5 md:grid-cols-3">
           {[
             {
               title: "Portfolio tracking",
@@ -84,9 +84,13 @@ export default async function Home() {
           ].map((feature) => (
             <div
               key={feature.title}
-              className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
+              className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
             >
-              <h2 className="font-semibold text-zinc-950 dark:text-zinc-50">
+              <div className="brand-accent-bar absolute inset-x-0 top-0 h-0.5" aria-hidden="true" />
+              <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-amber-700/90 dark:text-amber-400/90">
+                IIC4 platform
+              </p>
+              <h2 className="mt-2 font-semibold text-brand-navy dark:text-zinc-50">
                 {feature.title}
               </h2>
               <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">

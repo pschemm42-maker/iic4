@@ -5,6 +5,7 @@ import { refreshAllQuotes } from "@/lib/portfolio/actions";
 
 type RefreshAllPricesButtonProps = {
   lastUpdatedAt: string | null;
+  onDark?: boolean;
 };
 
 function InfoIcon() {
@@ -24,12 +25,22 @@ function InfoIcon() {
   );
 }
 
-function MarketDataTooltip({ lastUpdatedAt }: { lastUpdatedAt: string | null }) {
+function MarketDataTooltip({
+  lastUpdatedAt,
+  onDark = false,
+}: {
+  lastUpdatedAt: string | null;
+  onDark?: boolean;
+}) {
   return (
     <div className="group relative">
       <button
         type="button"
-        className="rounded-full p-1.5 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+        className={`rounded-full p-1.5 transition-colors ${
+          onDark
+            ? "text-slate-300 hover:bg-white/10 hover:text-white"
+            : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+        }`}
         aria-label="Market data information"
       >
         <InfoIcon />
@@ -60,6 +71,7 @@ function MarketDataTooltip({ lastUpdatedAt }: { lastUpdatedAt: string | null }) 
 
 export function RefreshAllPricesButton({
   lastUpdatedAt,
+  onDark = false,
 }: RefreshAllPricesButtonProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -84,12 +96,16 @@ export function RefreshAllPricesButton({
   return (
     <div className="flex shrink-0 flex-col items-end gap-2">
       <div className="flex items-center gap-2">
-        <MarketDataTooltip lastUpdatedAt={lastUpdatedAt} />
+        <MarketDataTooltip lastUpdatedAt={lastUpdatedAt} onDark={onDark} />
         <button
           type="button"
           onClick={handleRefresh}
           disabled={isPending}
-          className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+            onDark
+              ? "border-white/20 bg-white/10 text-white hover:bg-white/15"
+              : "border-zinc-300 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          }`}
         >
           {isPending ? "Refreshing prices..." : "Refresh all prices"}
         </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { BrandCard } from "@/components/brand/brand-card";
 import { PurchaseLotsDialog } from "@/components/portfolio/purchase-lots-dialog";
 import { EditHoldingDialog } from "@/components/portfolio/edit-holding-dialog";
 import {
@@ -200,7 +201,7 @@ function TrashIcon() {
       viewBox="0 0 20 20"
       fill="currentColor"
       aria-hidden="true"
-      className="h-4 w-4"
+      className="h-3.5 w-3.5"
     >
       <path
         fillRule="evenodd"
@@ -217,7 +218,7 @@ function PencilIcon() {
       viewBox="0 0 20 20"
       fill="currentColor"
       aria-hidden="true"
-      className="h-4 w-4"
+      className="h-3.5 w-3.5"
     >
       <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
     </svg>
@@ -294,12 +295,13 @@ export function PortfolioTable({
         <PurchaseLotsDialog
           holdingId={selectedHolding.id}
           ticker={selectedHolding.ticker}
+          isAdministrator={isAdministrator}
           onClose={() => setSelectedHolding(null)}
         />
       ) : null}
-      <section className="rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <table className="w-full table-fixed text-left text-sm">
-          <thead className="bg-zinc-50 text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
+      <BrandCard accent className="overflow-hidden">
+        <table className="w-full table-fixed text-left text-sm leading-tight">
+          <thead className="bg-brand-navy/[0.03] text-zinc-500 dark:bg-brand-navy/20 dark:text-zinc-400">
             <tr>
               <SortableHeader
                 label="Ticker"
@@ -307,7 +309,7 @@ export function PortfolioTable({
                 sortColumn={sortColumn}
                 sortDirection={sortDirection}
                 onSort={handleSort}
-                className="w-[4%] px-2 py-2.5"
+                className="w-[4%] px-1.5 py-1.5"
               />
               <SortableHeader
                 label="Company"
@@ -315,7 +317,7 @@ export function PortfolioTable({
                 sortColumn={sortColumn}
                 sortDirection={sortDirection}
                 onSort={handleSort}
-                className="w-[12%] px-2 py-2.5"
+                className="w-[12%] px-1.5 py-1.5"
               />
               <SortableHeader
                 label="Sector"
@@ -323,7 +325,7 @@ export function PortfolioTable({
                 sortColumn={sortColumn}
                 sortDirection={sortDirection}
                 onSort={handleSort}
-                className="w-[8%] px-2 py-2.5"
+                className="w-[8%] px-1.5 py-1.5"
               />
               <SortableHeader
                 label="Shares"
@@ -332,7 +334,7 @@ export function PortfolioTable({
                 sortDirection={sortDirection}
                 onSort={handleSort}
                 align="right"
-                className="w-[6%] px-2 py-2.5"
+                className="w-[6%] px-1.5 py-1.5"
               />
               <SortableHeader
                 label="Avg cost"
@@ -341,7 +343,7 @@ export function PortfolioTable({
                 sortDirection={sortDirection}
                 onSort={handleSort}
                 align="right"
-                className="w-[7%] px-2 py-2.5"
+                className="w-[7%] px-1.5 py-1.5"
               />
               <SortableHeader
                 label="Current"
@@ -350,7 +352,7 @@ export function PortfolioTable({
                 sortDirection={sortDirection}
                 onSort={handleSort}
                 align="right"
-                className="w-[7%] px-2 py-2.5"
+                className="w-[7%] px-1.5 py-1.5"
               />
               <SortableHeader
                 label="Cost basis"
@@ -359,7 +361,7 @@ export function PortfolioTable({
                 sortDirection={sortDirection}
                 onSort={handleSort}
                 align="right"
-                className="w-[7%] px-2 py-2.5"
+                className="w-[7%] px-1.5 py-1.5"
               />
               <SortableHeader
                 label="Market value"
@@ -368,7 +370,7 @@ export function PortfolioTable({
                 sortDirection={sortDirection}
                 onSort={handleSort}
                 align="right"
-                className="w-[7%] px-2 py-2.5"
+                className="w-[7%] px-1.5 py-1.5"
               />
               <SortableHeader
                 label="Gain/Loss"
@@ -377,7 +379,7 @@ export function PortfolioTable({
                 sortDirection={sortDirection}
                 onSort={handleSort}
                 align="right"
-                className="w-[7%] px-2 py-2.5"
+                className="w-[7%] px-1.5 py-1.5"
               />
               <SortableHeader
                 label="Return"
@@ -386,7 +388,7 @@ export function PortfolioTable({
                 sortDirection={sortDirection}
                 onSort={handleSort}
                 align="right"
-                className="w-[6%] px-2 py-2.5"
+                className="w-[6%] px-1.5 py-1.5"
               />
               <SortableHeader
                 label="Weight"
@@ -395,7 +397,7 @@ export function PortfolioTable({
                 sortDirection={sortDirection}
                 onSort={handleSort}
                 align="right"
-                className="w-[5%] px-2 py-2.5"
+                className="w-[5%] px-1.5 py-1.5"
               />
               <SortableHeader
                 label="P/E"
@@ -404,7 +406,7 @@ export function PortfolioTable({
                 sortDirection={sortDirection}
                 onSort={handleSort}
                 align="right"
-                className="w-[5%] px-2 py-2.5"
+                className="w-[5%] px-1.5 py-1.5"
               />
               <SortableHeader
                 label="Div yield"
@@ -413,7 +415,7 @@ export function PortfolioTable({
                 sortDirection={sortDirection}
                 onSort={handleSort}
                 align="right"
-                className="w-[6%] px-2 py-2.5"
+                className="w-[6%] px-1.5 py-1.5"
               />
               <SortableHeader
                 label="Purchased"
@@ -421,10 +423,10 @@ export function PortfolioTable({
                 sortColumn={sortColumn}
                 sortDirection={sortDirection}
                 onSort={handleSort}
-                className="w-[7%] px-2 py-2.5"
+                className="w-[7%] px-1.5 py-1.5"
               />
               {isAdministrator ? (
-                <th className="w-[6%] px-2 py-2.5 font-medium">Actions</th>
+                <th className="w-[6%] px-1.5 py-1.5 font-medium">Actions</th>
               ) : null}
             </tr>
           </thead>
@@ -434,23 +436,23 @@ export function PortfolioTable({
                 key={holding.id}
                 className="border-t border-zinc-200 dark:border-zinc-800"
               >
-                <td className="px-2 py-2.5 font-semibold text-zinc-950 dark:text-zinc-50">
+                <td className="px-1.5 py-1 font-semibold text-zinc-950 dark:text-zinc-50">
                   {holding.ticker}
                 </td>
-                <td className="px-2 py-2.5 text-zinc-700 dark:text-zinc-300">
+                <td className="px-1.5 py-1 text-zinc-700 dark:text-zinc-300">
                   <div className="truncate" title={holding.company_name}>
                     {holding.company_name}
                   </div>
                   {holding.notes ? (
-                    <div className="mt-1 truncate text-xs text-zinc-500" title={holding.notes}>
+                    <div className="mt-0.5 truncate text-xs text-zinc-500" title={holding.notes}>
                       {holding.notes}
                     </div>
                   ) : null}
                 </td>
-                <td className="truncate px-2 py-2.5 text-zinc-600 dark:text-zinc-400" title={holding.sector || undefined}>
+                <td className="truncate px-1.5 py-1 text-zinc-600 dark:text-zinc-400" title={holding.sector || undefined}>
                   {holding.sector || "—"}
                 </td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
+                <td className="whitespace-nowrap px-1.5 py-1 text-right tabular-nums">
                   <button
                     type="button"
                     onClick={() => setSelectedHolding(holding)}
@@ -460,42 +462,42 @@ export function PortfolioTable({
                     {formatNumber(holding.shares, 4)}
                   </button>
                 </td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-1.5 py-1 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                   {formatCurrency(holding.average_cost_per_share)}
                 </td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-1.5 py-1 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                   {formatCurrency(holding.current_price)}
                 </td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-1.5 py-1 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                   {formatCurrency(holding.costBasis)}
                 </td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-1.5 py-1 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                   {formatCurrency(holding.marketValue)}
                 </td>
                 <td
-                  className={`whitespace-nowrap px-2 py-2.5 text-right tabular-nums font-medium ${gainLossClassName(holding.gainLoss)}`}
+                  className={`whitespace-nowrap px-1.5 py-1 text-right tabular-nums font-medium ${gainLossClassName(holding.gainLoss)}`}
                 >
                   {formatCurrency(holding.gainLoss)}
                 </td>
                 <td
-                  className={`whitespace-nowrap px-2 py-2.5 text-right tabular-nums font-medium ${gainLossClassName(holding.gainLossPercent)}`}
+                  className={`whitespace-nowrap px-1.5 py-1 text-right tabular-nums font-medium ${gainLossClassName(holding.gainLossPercent)}`}
                 >
                   {formatPercent(holding.gainLossPercent)}
                 </td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-1.5 py-1 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                   {formatAllocationPercent(holding.portfolioWeight)}
                 </td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-1.5 py-1 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                   {holding.pe_ratio !== null
                     ? formatNumber(holding.pe_ratio, 2)
                     : "—"}
                 </td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                <td className="whitespace-nowrap px-1.5 py-1 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                   {holding.dividend_yield !== null
                     ? formatAllocationPercent(holding.dividend_yield)
                     : "—"}
                 </td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-zinc-600 dark:text-zinc-400">
+                <td className="whitespace-nowrap px-1.5 py-1 text-zinc-600 dark:text-zinc-400">
                   {holding.purchase_date ? (
                     <>
                       {new Date(holding.purchase_date).toLocaleDateString()}
@@ -508,14 +510,14 @@ export function PortfolioTable({
                   )}
                 </td>
                 {isAdministrator ? (
-                  <td className="px-2 py-2.5">
+                  <td className="px-1.5 py-1">
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
                         disabled={isPending}
                         onClick={() => setEditingHolding(holding)}
                         aria-label={`Edit ${holding.ticker}`}
-                        className="rounded-md border border-zinc-300 p-1.5 text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        className="rounded border border-zinc-300 p-1 text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                       >
                         <PencilIcon />
                       </button>
@@ -524,7 +526,7 @@ export function PortfolioTable({
                         disabled={isPending}
                         onClick={() => handleRemove(holding.id, holding.ticker)}
                         aria-label={`Remove ${holding.ticker} from portfolio`}
-                        className="rounded-md border border-red-300 p-1.5 text-red-700 transition-colors hover:bg-red-50 disabled:opacity-60 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40"
+                        className="rounded border border-red-300 p-1 text-red-700 transition-colors hover:bg-red-50 disabled:opacity-60 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40"
                       >
                         <TrashIcon />
                       </button>
@@ -535,7 +537,7 @@ export function PortfolioTable({
             ))}
           </tbody>
         </table>
-      </section>
+      </BrandCard>
     </>
   );
 }

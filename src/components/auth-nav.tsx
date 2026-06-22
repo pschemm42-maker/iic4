@@ -9,7 +9,7 @@ export async function AuthNav() {
     return (
       <Link
         href="/auth/login"
-        className="rounded-lg bg-[#0C1929] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#16263d]"
+        className="rounded-lg bg-brand-teal px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-teal-400"
       >
         Sign in
       </Link>
@@ -18,13 +18,11 @@ export async function AuthNav() {
 
   return (
     <div className="flex items-center gap-3">
-      <span className="hidden text-sm text-zinc-500 sm:inline dark:text-zinc-400">
-        {user.email}
-      </span>
+      <span className="hidden text-sm text-slate-400 sm:inline">{user.email}</span>
       <form action={signOut}>
         <button
           type="submit"
-          className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50"
+          className="text-sm font-medium text-slate-300 transition-colors hover:text-white"
         >
           Sign out
         </button>

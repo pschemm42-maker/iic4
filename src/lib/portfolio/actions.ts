@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentProfile, isAdministrator } from "@/lib/auth/session";
 import {
+  aggregateHoldingsFromPurchases,
   calculateWeightedAverageCost,
   earliestPurchaseDate,
 } from "@/lib/portfolio/aggregate";
@@ -16,6 +17,7 @@ import type {
   PortfolioPriceHistory,
   PortfolioPriceHistoryInput,
   PortfolioPurchase,
+  PortfolioPurchaseUpdateInput,
 } from "@/lib/types/portfolio";
 
 export type PortfolioActionResult<T = undefined> =
@@ -148,6 +150,72 @@ function parseHoldingUpdateInput(
   }
 
   return input;
+}
+
+function parsePurchaseUpdateInput(
+  formData: FormData,
+): PortfolioPurchaseUpdateInput | null {
+  const shares = Number(formData.get("shares"));
+  const costPerShare = Number(formData.get("costPerShare"));
+  const purchaseDateRaw = String(formData.get("purchaseDate") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  if (!Number.isFinite(shares) || shares <= 0) {
+    return null;
+  }
+
+  if (!Number.isFinite(costPerShare) || costPerShare < 0) {
+    return null;
+  }
+
+  return {
+    shares,
+    costPerShare,
+    purchaseDate: purchaseDateRaw || null,
+    notes,
+  };
+}
+
+async function syncHoldingFromPurchases(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  holdingId: string,
+): Promise<PortfolioActionResult> {
+  const { data: purchases, error: purchasesError } = await supabase
+    .from("portfolio_purchases")
+    .select("shares, cost_per_share, purchase_date")
+    .eq("holding_id", holdingId)
+    .order("created_at", { ascending: true });
+
+  if (purchasesError) {
+    return { success: false, error: formatSupabaseNetworkError(purchasesError) };
+  }
+
+  if (!purchases || purchases.length === 0) {
+    return { success: false, error: "No purchase lots found for this holding." };
+  }
+
+  const aggregated = aggregateHoldingsFromPurchases(
+    purchases.map((purchase) => ({
+      shares: Number(purchase.shares),
+      cost_per_share: Number(purchase.cost_per_share),
+      purchase_date: purchase.purchase_date,
+    })),
+  );
+
+  const { error: updateError } = await supabase
+    .from("portfolio_holdings")
+    .update({
+      shares: aggregated.shares,
+      average_cost_per_share: aggregated.averageCostPerShare,
+      purchase_date: aggregated.purchaseDate,
+    })
+    .eq("id", holdingId);
+
+  if (updateError) {
+    return { success: false, error: formatSupabaseNetworkError(updateError) };
+  }
+
+  return { success: true };
 }
 
 export async function listHoldings(): Promise<
@@ -508,6 +576,83 @@ export async function listPurchasesForHolding(
     }
 
     return { success: true, data: data as PortfolioPurchase[] };
+  } catch (error) {
+    return {
+      success: false,
+      error: formatSupabaseNetworkError(error),
+    };
+  }
+}
+
+export async function updatePurchase(
+  purchaseId: string,
+  formData: FormData,
+): Promise<PortfolioActionResult<PortfolioPurchase>> {
+  const authError = await assertAdministrator();
+  if (authError) {
+    return authError;
+  }
+
+  if (!purchaseId) {
+    return { success: false, error: "Purchase lot is required." };
+  }
+
+  const input = parsePurchaseUpdateInput(formData);
+  if (!input) {
+    return {
+      success: false,
+      error: "Shares and cost per share are required and must be valid.",
+    };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: existingPurchase, error: lookupError } = await supabase
+      .from("portfolio_purchases")
+      .select("*")
+      .eq("id", purchaseId)
+      .maybeSingle();
+
+    if (lookupError) {
+      return { success: false, error: formatSupabaseNetworkError(lookupError) };
+    }
+
+    if (!existingPurchase) {
+      return { success: false, error: "Purchase lot not found." };
+    }
+
+    const { data: updatedPurchase, error: updateError } = await supabase
+      .from("portfolio_purchases")
+      .update({
+        shares: input.shares,
+        cost_per_share: input.costPerShare,
+        purchase_date: input.purchaseDate,
+        notes: input.notes,
+      })
+      .eq("id", purchaseId)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      return { success: false, error: formatSupabaseNetworkError(updateError) };
+    }
+
+    const syncResult = await syncHoldingFromPurchases(
+      supabase,
+      existingPurchase.holding_id,
+    );
+
+    if (!syncResult.success) {
+      return syncResult;
+    }
+
+    revalidatePath("/portfolio");
+
+    return {
+      success: true,
+      data: updatedPurchase as PortfolioPurchase,
+      message: "Purchase lot updated.",
+    };
   } catch (error) {
     return {
       success: false,
