@@ -1,11 +1,14 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { updateHolding } from "@/lib/portfolio/actions";
+import { updateSnapshotHolding } from "@/lib/portfolio/snapshot-actions";
 import type { PortfolioHoldingWithMetrics } from "@/lib/types/portfolio";
 
 type EditHoldingDialogProps = {
   holding: PortfolioHoldingWithMetrics;
+  mode?: "live" | "snapshot";
   onClose: () => void;
 };
 
@@ -20,7 +23,12 @@ function formatDateInputValue(date: string | null) {
   return date.slice(0, 10);
 }
 
-export function EditHoldingDialog({ holding, onClose }: EditHoldingDialogProps) {
+export function EditHoldingDialog({
+  holding,
+  mode = "live",
+  onClose,
+}: EditHoldingDialogProps) {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const canEditPosition = holding.purchase_count <= 1;
@@ -40,9 +48,13 @@ export function EditHoldingDialog({ holding, onClose }: EditHoldingDialogProps) 
     setError(null);
 
     startTransition(async () => {
-      const result = await updateHolding(holding.id, formData);
+      const result =
+        mode === "snapshot"
+          ? await updateSnapshotHolding(holding.id, formData)
+          : await updateHolding(holding.id, formData);
 
       if (result.success) {
+        router.refresh();
         onClose();
         return;
       }
@@ -159,7 +171,7 @@ export function EditHoldingDialog({ holding, onClose }: EditHoldingDialogProps) 
 
             <label className="grid gap-2 text-sm">
               <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                Current price
+                {mode === "snapshot" ? "Close price" : "Current price"}
               </span>
               <input
                 name="currentPrice"

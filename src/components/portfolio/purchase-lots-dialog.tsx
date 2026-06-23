@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 import { EditPurchaseLotDialog } from "@/components/portfolio/edit-purchase-lot-dialog";
 import { listPurchasesForHolding } from "@/lib/portfolio/actions";
+import { listSnapshotPurchases } from "@/lib/portfolio/snapshot-actions";
 import { formatCurrency, formatNumber } from "@/lib/portfolio/metrics";
 import type { PortfolioPurchase } from "@/lib/types/portfolio";
+import { snapshotPurchaseToPortfolioPurchase } from "@/lib/types/portfolio-snapshot";
 
 type PurchaseLotsDialogProps = {
   holdingId: string;
   ticker: string;
   isAdministrator?: boolean;
+  mode?: "live" | "snapshot";
   onClose: () => void;
 };
 
@@ -44,6 +47,7 @@ export function PurchaseLotsDialog({
   holdingId,
   ticker,
   isAdministrator = false,
+  mode = "live",
   onClose,
 }: PurchaseLotsDialogProps) {
   const [purchases, setPurchases] = useState<PortfolioPurchase[] | null>(null);
@@ -60,6 +64,23 @@ export function PurchaseLotsDialog({
     async function loadPurchases() {
       setIsLoading(true);
       setError(null);
+
+      if (mode === "snapshot") {
+        const result = await listSnapshotPurchases(holdingId);
+
+        if (cancelled) {
+          return;
+        }
+
+        if (result.success && result.data) {
+          setPurchases(result.data.map(snapshotPurchaseToPortfolioPurchase));
+        } else {
+          setError(result.success ? "No purchase lots found." : result.error);
+        }
+
+        setIsLoading(false);
+        return;
+      }
 
       const result = await listPurchasesForHolding(holdingId);
 
@@ -81,7 +102,7 @@ export function PurchaseLotsDialog({
     return () => {
       cancelled = true;
     };
-  }, [holdingId]);
+  }, [holdingId, mode]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -111,6 +132,7 @@ export function PurchaseLotsDialog({
           purchase={editingPurchase.purchase}
           lotNumber={editingPurchase.lotNumber}
           ticker={ticker}
+          mode={mode}
           onClose={() => setEditingPurchase(null)}
           onSaved={handlePurchaseSaved}
         />

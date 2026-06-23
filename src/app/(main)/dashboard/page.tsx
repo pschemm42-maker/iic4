@@ -16,6 +16,12 @@ const cards = [
     available: true,
   },
   {
+    title: "Club Portfolio History",
+    description: "Review saved snapshots of club holdings and performance.",
+    href: "/portfolio/history",
+    available: true,
+  },
+  {
     title: "Equity Selection",
     description: "Share investment ideas and stock theses with members.",
     href: "/equity-selection",
@@ -48,7 +54,7 @@ export default async function DashboardPage() {
         description={`Signed in as ${user.email}. Track portfolio performance, review equity selections, and collaborate with fellow members.`}
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) =>
           card.available && card.href ? (
             <Link key={card.title} href={card.href} className="group block">

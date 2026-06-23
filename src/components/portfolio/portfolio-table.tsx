@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { BrandCard } from "@/components/brand/brand-card";
 import { PurchaseLotsDialog } from "@/components/portfolio/purchase-lots-dialog";
@@ -12,6 +13,7 @@ import {
   gainLossClassName,
 } from "@/lib/portfolio/metrics";
 import { removeHolding } from "@/lib/portfolio/actions";
+import { removeSnapshotHolding } from "@/lib/portfolio/snapshot-actions";
 import type { PortfolioHoldingWithMetrics } from "@/lib/types/portfolio";
 
 type SortColumn =
@@ -228,12 +230,17 @@ function PencilIcon() {
 type PortfolioTableProps = {
   holdings: PortfolioHoldingWithMetrics[];
   isAdministrator: boolean;
+  mode?: "live" | "snapshot";
+  emptyMessage?: string;
 };
 
 export function PortfolioTable({
   holdings,
   isAdministrator,
+  mode = "live",
+  emptyMessage,
 }: PortfolioTableProps) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedHolding, setSelectedHolding] =
     useState<PortfolioHoldingWithMetrics | null>(null);
@@ -263,10 +270,16 @@ export function PortfolioTable({
     }
 
     startTransition(async () => {
-      const result = await removeHolding(holdingId);
+      const result =
+        mode === "snapshot"
+          ? await removeSnapshotHolding(holdingId)
+          : await removeHolding(holdingId);
       if (!result.success) {
         alert(result.error);
+        return;
       }
+
+      router.refresh();
     });
   }
 
@@ -274,10 +287,14 @@ export function PortfolioTable({
     return (
       <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          No holdings yet.
-          {isAdministrator
-            ? " Add a stock ticker to start tracking the club portfolio."
-            : " An administrator can add holdings for the club."}
+          {emptyMessage ??
+            (mode === "snapshot"
+              ? "No holdings in this snapshot."
+              : `No holdings yet.${
+                  isAdministrator
+                    ? " Add a stock ticker to start tracking the club portfolio."
+                    : " An administrator can add holdings for the club."
+                }`)}
         </p>
       </div>
     );
@@ -288,6 +305,7 @@ export function PortfolioTable({
       {editingHolding ? (
         <EditHoldingDialog
           holding={editingHolding}
+          mode={mode}
           onClose={() => setEditingHolding(null)}
         />
       ) : null}
@@ -296,6 +314,7 @@ export function PortfolioTable({
           holdingId={selectedHolding.id}
           ticker={selectedHolding.ticker}
           isAdministrator={isAdministrator}
+          mode={mode}
           onClose={() => setSelectedHolding(null)}
         />
       ) : null}
@@ -346,7 +365,7 @@ export function PortfolioTable({
                 className="w-[7%] px-1.5 py-1.5"
               />
               <SortableHeader
-                label="Current"
+                label={mode === "snapshot" ? "Close" : "Current"}
                 column="current_price"
                 sortColumn={sortColumn}
                 sortDirection={sortDirection}

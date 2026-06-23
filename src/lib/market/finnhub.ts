@@ -1,4 +1,5 @@
 import { getFinnhubApiKey } from "@/lib/env";
+import { fetchYahooDailyClose } from "@/lib/market/yahoo";
 import type {
   BatchQuoteResult,
   FinancialMetrics,
@@ -355,6 +356,190 @@ export async function fetchQuotesBatched(
 
     if (index + batchSize < uniqueTickers.length) {
       await sleep(200);
+    }
+  }
+
+  return { success: true, data: { succeeded, failed } };
+}
+
+
+function toTradingDateString(unix: number) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(unix * 1000));
+}
+
+function dateToUnixStart(date: string) {
+  return Math.floor(new Date(`${date}T00:00:00Z`).getTime() / 1000);
+}
+
+function pickCloseOnOrBefore(
+  timestamps: number[],
+  closes: number[],
+  targetDate: string,
+  toDateString: (unix: number) => string,
+) {
+  let bestClose: number | null = null;
+  let bestDate = "";
+
+  for (let index = 0; index < timestamps.length; index += 1) {
+    const tradingDate = toDateString(timestamps[index]);
+    const close = closes[index];
+
+    if (
+      tradingDate <= targetDate &&
+      typeof close === "number" &&
+      Number.isFinite(close) &&
+      close > 0 &&
+      tradingDate >= bestDate
+    ) {
+      bestDate = tradingDate;
+      bestClose = close;
+    }
+  }
+
+  return bestClose;
+}
+
+async function fetchFinnhubDailyClose(
+  ticker: string,
+  date: string,
+): Promise<FinnhubResult<number>> {
+  const symbol = normalizeTicker(ticker);
+  const targetUnix = dateToUnixStart(date);
+  const from = targetUnix - 14 * 86_400;
+  const to = targetUnix + 5 * 86_400;
+
+  const response = await finnhubFetch(
+    `/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${to}`,
+  );
+
+  if (!response.success) {
+    return response;
+  }
+
+  const data = (await response.data.json()) as {
+    error?: string;
+    s?: string;
+    t?: number[];
+    c?: number[];
+  };
+
+  if (data.error) {
+    return { success: false, error: data.error };
+  }
+
+  if (data.s === "no_data" || !data.t?.length || !data.c?.length) {
+    return {
+      success: false,
+      error: `No historical price found for ${symbol} on ${date}.`,
+    };
+  }
+
+  const bestClose = pickCloseOnOrBefore(
+    data.t,
+    data.c,
+    date,
+    toTradingDateString,
+  );
+
+  if (bestClose === null) {
+    return {
+      success: false,
+      error: `No historical price found for ${symbol} on or before ${date}.`,
+    };
+  }
+
+  return { success: true, data: bestClose };
+}
+
+export async function fetchDailyClose(
+  ticker: string,
+  date: string,
+): Promise<FinnhubResult<number>> {
+  if (getFinnhubApiKey()) {
+    const finnhubResult = await fetchFinnhubDailyClose(ticker, date);
+    if (finnhubResult.success) {
+      return finnhubResult;
+    }
+
+    const finnhubError = finnhubResult.error.toLowerCase();
+    const shouldFallback =
+      finnhubError.includes("don't have access") ||
+      finnhubError.includes("no historical price");
+
+    if (!shouldFallback) {
+      return finnhubResult;
+    }
+  }
+
+  return fetchYahooDailyClose(ticker, date);
+}
+
+export async function fetchDailyClosesBatched(
+  requests: Array<{ ticker: string; date: string }>,
+  batchSize = 3,
+): Promise<
+  FinnhubResult<{
+    succeeded: Array<{ ticker: string; date: string; closePrice: number }>;
+    failed: Array<{ ticker: string; date: string; error: string }>;
+  }>
+> {
+  if (!getFinnhubApiKey()) {
+    return { success: false, error: MISSING_API_KEY_ERROR };
+  }
+
+  const succeeded: Array<{
+    ticker: string;
+    date: string;
+    closePrice: number;
+  }> = [];
+  const failed: Array<{ ticker: string; date: string; error: string }> = [];
+
+  for (let index = 0; index < requests.length; index += batchSize) {
+    const batch = requests.slice(index, index + batchSize);
+    const results = await Promise.all(
+      batch.map(async (request) => {
+        const result = await fetchDailyClose(request.ticker, request.date);
+        if (!result.success) {
+          return {
+            success: false as const,
+            ticker: normalizeTicker(request.ticker),
+            date: request.date,
+            error: result.error,
+          };
+        }
+
+        return {
+          success: true as const,
+          ticker: normalizeTicker(request.ticker),
+          date: request.date,
+          closePrice: result.data,
+        };
+      }),
+    );
+
+    for (const result of results) {
+      if (result.success) {
+        succeeded.push({
+          ticker: result.ticker,
+          date: result.date,
+          closePrice: result.closePrice,
+        });
+      } else {
+        failed.push({
+          ticker: result.ticker,
+          date: result.date,
+          error: result.error,
+        });
+      }
+    }
+
+    if (index + batchSize < requests.length) {
+      await sleep(500);
     }
   }
 

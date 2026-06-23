@@ -116,6 +116,18 @@ export function formatSupabaseNetworkError(error: unknown): string {
       return 'The "portfolio_price_history" table is missing. Run supabase/migrations/004_portfolio_price_history.sql in the Supabase SQL Editor, then try again.';
     }
 
+    if (message.includes("portfolio_snapshots")) {
+      return 'The "portfolio_snapshots" table is missing. Run supabase/migrations/015_portfolio_snapshots.sql in the Supabase SQL Editor, then try again.';
+    }
+
+    if (message.includes("portfolio_snapshot_holdings")) {
+      return 'The "portfolio_snapshot_holdings" table is missing. Run supabase/migrations/015_portfolio_snapshots.sql in the Supabase SQL Editor, then try again.';
+    }
+
+    if (message.includes("portfolio_snapshot_purchases")) {
+      return 'The "portfolio_snapshot_purchases" table is missing. Run supabase/migrations/015_portfolio_snapshots.sql in the Supabase SQL Editor, then try again.';
+    }
+
     if (message.includes("stock_suggestions")) {
       return 'The "stock_suggestions" table is missing. Run supabase/migrations/005_stock_suggestions.sql in the Supabase SQL Editor, then try again.';
     }

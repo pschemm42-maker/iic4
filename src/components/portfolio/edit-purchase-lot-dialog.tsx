@@ -3,12 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { updatePurchase } from "@/lib/portfolio/actions";
+import { updateSnapshotPurchase } from "@/lib/portfolio/snapshot-actions";
 import type { PortfolioPurchase } from "@/lib/types/portfolio";
+import { snapshotPurchaseToPortfolioPurchase } from "@/lib/types/portfolio-snapshot";
 
 type EditPurchaseLotDialogProps = {
   purchase: PortfolioPurchase;
   lotNumber: number;
   ticker: string;
+  mode?: "live" | "snapshot";
   onClose: () => void;
   onSaved: (purchase: PortfolioPurchase) => void;
 };
@@ -28,6 +31,7 @@ export function EditPurchaseLotDialog({
   purchase,
   lotNumber,
   ticker,
+  mode = "live",
   onClose,
   onSaved,
 }: EditPurchaseLotDialogProps) {
@@ -50,6 +54,22 @@ export function EditPurchaseLotDialog({
     setError(null);
 
     startTransition(async () => {
+      if (mode === "snapshot") {
+        const result = await updateSnapshotPurchase(purchase.id, formData);
+
+        if (result.success && result.data) {
+          router.refresh();
+          onSaved(snapshotPurchaseToPortfolioPurchase(result.data));
+          onClose();
+          return;
+        }
+
+        setError(
+          result.success ? "Purchase lot could not be updated." : result.error,
+        );
+        return;
+      }
+
       const result = await updatePurchase(purchase.id, formData);
 
       if (result.success && result.data) {

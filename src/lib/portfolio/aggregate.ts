@@ -36,6 +36,25 @@ export type PurchaseLotValues = {
   purchase_date: string | null;
 };
 
+export function filterPurchasesAsOf(
+  purchases: PurchaseLotValues[],
+  asOfDate: string,
+) {
+  return purchases.filter(
+    (purchase) =>
+      !purchase.purchase_date || purchase.purchase_date <= asOfDate,
+  );
+}
+
+export function aggregateHoldingsFromPurchasesAsOf(
+  purchases: PurchaseLotValues[],
+  asOfDate: string,
+) {
+  return aggregateHoldingsFromPurchases(
+    filterPurchasesAsOf(purchases, asOfDate),
+  );
+}
+
 export function aggregateHoldingsFromPurchases(purchases: PurchaseLotValues[]) {
   if (purchases.length === 0) {
     return {

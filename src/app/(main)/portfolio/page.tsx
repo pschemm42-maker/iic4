@@ -4,6 +4,8 @@ import { ExportPortfolioButton } from "@/components/portfolio/export-portfolio-b
 import { PortfolioSummaryCards } from "@/components/portfolio/portfolio-summary";
 import { PortfolioTable } from "@/components/portfolio/portfolio-table";
 import { RefreshAllPricesButton } from "@/components/portfolio/refresh-all-prices-button";
+import { ClubPortfolioHistoryLink } from "@/components/portfolio/snapshot-history-actions";
+import { SaveSnapshotButton } from "@/components/portfolio/save-snapshot-button";
 import {
   getCurrentProfile,
   isAdministrator,
@@ -39,9 +41,13 @@ export default async function PortfolioPage() {
         description="Track Independent Investment Club IV stock positions, cost basis, market value, and performance across the club portfolio."
         actions={
           <div className="flex flex-wrap items-start justify-end gap-2">
+            <ClubPortfolioHistoryLink onDark />
             <ExportPortfolioButton holdings={holdings} onDark />
             {canManage ? (
-              <RefreshAllPricesButton lastUpdatedAt={lastUpdatedAt} onDark />
+              <>
+                <SaveSnapshotButton onDark />
+                <RefreshAllPricesButton lastUpdatedAt={lastUpdatedAt} onDark />
+              </>
             ) : null}
           </div>
         }
