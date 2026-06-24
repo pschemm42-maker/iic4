@@ -4,11 +4,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { markUserActive } from "@/lib/users/actions";
 
 type AuthStatus = "verifying" | "ready" | "needs_link" | "error";
 
-export function SetPasswordForm() {
+export function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [password, setPassword] = useState("");
@@ -18,7 +17,7 @@ export function SetPasswordForm() {
   );
   const [error, setError] = useState<string | null>(
     searchParams.get("error") === "auth"
-      ? "Your invite link is invalid or expired. Ask an administrator to resend it."
+      ? "Your reset link is invalid or expired. Request a new one from the sign-in page."
       : null,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -27,16 +26,20 @@ export function SetPasswordForm() {
     let mounted = true;
     const supabase = createClient();
 
+    function markReady() {
+      if (mounted) {
+        setStatus("ready");
+        setError(null);
+      }
+    }
+
     async function establishSession() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
       if (session) {
-        if (mounted) {
-          setStatus("ready");
-          setError(null);
-        }
+        markReady();
         return;
       }
 
@@ -46,11 +49,8 @@ export function SetPasswordForm() {
           await supabase.auth.exchangeCodeForSession(code);
 
         if (!exchangeError) {
-          if (mounted) {
-            setStatus("ready");
-            setError(null);
-          }
-          window.history.replaceState({}, "", "/auth/set-password");
+          markReady();
+          window.history.replaceState({}, "", "/auth/reset-password");
           return;
         }
       }
@@ -68,11 +68,8 @@ export function SetPasswordForm() {
           });
 
           if (!sessionError) {
-            if (mounted) {
-              setStatus("ready");
-              setError(null);
-            }
-            window.history.replaceState({}, "", "/auth/set-password");
+            markReady();
+            window.history.replaceState({}, "", "/auth/reset-password");
             return;
           }
         }
@@ -84,7 +81,7 @@ export function SetPasswordForm() {
         const confirmUrl = new URL("/auth/confirm", window.location.origin);
         confirmUrl.searchParams.set("token_hash", tokenHash);
         confirmUrl.searchParams.set("type", type);
-        confirmUrl.searchParams.set("next", "/auth/set-password");
+        confirmUrl.searchParams.set("next", "/auth/reset-password");
         window.location.href = confirmUrl.toString();
         return;
       }
@@ -96,10 +93,9 @@ export function SetPasswordForm() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session && mounted) {
-        setStatus("ready");
-        setError(null);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" || session) {
+        markReady();
       }
     });
 
@@ -131,10 +127,9 @@ export function SetPasswordForm() {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    const userId = session?.user.id;
 
-    if (!userId) {
-      setError("Your session expired. Open the invite link from your email again.");
+    if (!session) {
+      setError("Your session expired. Request a new reset link from the sign-in page.");
       setStatus("needs_link");
       setIsSubmitting(false);
       return;
@@ -148,15 +143,14 @@ export function SetPasswordForm() {
       return;
     }
 
-    await markUserActive(userId);
     await supabase.auth.signOut();
-    router.push("/auth/login?welcome=1");
+    router.push("/auth/login?reset=1");
   }
 
   if (status === "verifying") {
     return (
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Verifying your invite...
+        Verifying your reset link...
       </p>
     );
   }
@@ -164,16 +158,13 @@ export function SetPasswordForm() {
   if (status === "needs_link") {
     return (
       <div className="space-y-4 text-sm text-zinc-600 dark:text-zinc-400">
-        <p>We could not verify your invite on this page.</p>
-        <p>
-          Open the invite link from your email again, or ask an administrator to
-          resend the invite.
-        </p>
+        <p>We could not verify your reset link on this page.</p>
+        <p>Request a new reset link from the sign-in page and try again.</p>
         <Link
-          href="/auth/login"
+          href="/auth/forgot-password"
           className="inline-block font-medium text-teal-700 hover:text-teal-600 dark:text-teal-400"
         >
-          Back to sign in
+          Request a new reset link
         </Link>
       </div>
     );
@@ -186,10 +177,10 @@ export function SetPasswordForm() {
           {error}
         </p>
         <Link
-          href="/auth/login"
+          href="/auth/forgot-password"
           className="inline-block text-sm font-medium text-teal-700 hover:text-teal-600 dark:text-teal-400"
         >
-          Back to sign in
+          Request a new reset link
         </Link>
       </div>
     );
@@ -199,7 +190,7 @@ export function SetPasswordForm() {
     <form onSubmit={handleSubmit} className="grid gap-4">
       <label className="grid gap-2 text-sm">
         <span className="font-medium text-zinc-700 dark:text-zinc-300">
-          Password
+          New password
         </span>
         <input
           type="password"
@@ -214,7 +205,7 @@ export function SetPasswordForm() {
 
       <label className="grid gap-2 text-sm">
         <span className="font-medium text-zinc-700 dark:text-zinc-300">
-          Confirm password
+          Confirm new password
         </span>
         <input
           type="password"
@@ -238,7 +229,7 @@ export function SetPasswordForm() {
         disabled={isSubmitting}
         className="rounded-lg bg-[#0C1929] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#16263d] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isSubmitting ? "Saving..." : "Save password"}
+        {isSubmitting ? "Updating..." : "Update password"}
       </button>
     </form>
   );

@@ -19,6 +19,57 @@ export type FinnhubResult<T> =
   | { success: true; data: T }
   | { success: false; error: string };
 
+/**
+ * Yahoo Finance display-only insights. These augment the research view with
+ * analyst price targets, forward estimates, momentum, and recent news. They are
+ * NOT part of the statistical composite score. Every section is nullable because
+ * Yahoo coverage and crumb auth vary by ticker.
+ */
+export type YahooNewsItem = {
+  title: string;
+  publisher: string;
+  link: string;
+  publishedAt: string | null;
+};
+
+export type YahooPriceTarget = {
+  current: number | null;
+  mean: number | null;
+  high: number | null;
+  low: number | null;
+  upsidePct: number | null;
+  recommendationKey: string | null;
+  recommendationMean: number | null;
+  analystCount: number | null;
+};
+
+export type YahooForwardEstimate = {
+  label: string;
+  endDate: string | null;
+  epsAvg: number | null;
+  revenueAvg: number | null;
+  growthPct: number | null;
+};
+
+export type YahooTrend = {
+  price: number | null;
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  rangePositionPct: number | null;
+  return1moPct: number | null;
+  return6moPct: number | null;
+};
+
+export type YahooInsights = {
+  fetchedAt: string;
+  available: boolean;
+  note: string;
+  priceTarget: YahooPriceTarget | null;
+  forwardEstimates: YahooForwardEstimate[];
+  trend: YahooTrend | null;
+  news: YahooNewsItem[];
+};
+
 export type RecommendationTrendPeriod = {
   period: string;
   strongBuy: number;

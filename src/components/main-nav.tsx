@@ -13,6 +13,12 @@ export async function MainNav() {
       >
         Dashboard
       </Link>
+      <Link
+        href="/members"
+        className="text-sm font-medium text-slate-300 transition-colors hover:text-white"
+      >
+        Members
+      </Link>
       {showUsers ? (
         <Link
           href="/users"

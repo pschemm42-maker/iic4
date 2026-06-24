@@ -28,10 +28,10 @@ const cards = [
     available: true,
   },
   {
-    title: "Club admin",
-    description: "Manage members and club settings.",
-    href: null,
-    available: false,
+    title: "Club Members",
+    description: "View member profiles, bios, positions, and investment bases.",
+    href: "/members",
+    available: true,
   },
 ] as const;
 

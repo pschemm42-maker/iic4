@@ -72,6 +72,8 @@ export type PortfolioSummary = {
   totalGainLoss: number | null;
   totalGainLossPercent: number | null;
   holdingCount: number;
+  clubCash: number;
+  totalClubEquity: number | null;
 };
 
 export type PortfolioPriceHistory = {

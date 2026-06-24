@@ -5,6 +5,7 @@ export type PortfolioSnapshot = {
   snapshot_date: string;
   created_at: string;
   created_by: string | null;
+  club_cash: number;
 };
 
 export type PortfolioSnapshotHolding = {

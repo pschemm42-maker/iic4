@@ -36,6 +36,7 @@ export function calculateHoldingMetrics(
 
 export function calculatePortfolioSummary(
   holdings: PortfolioHoldingWithMetrics[],
+  clubCash = 0,
 ): PortfolioSummary {
   const totalCostBasis = holdings.reduce(
     (sum, holding) => sum + holding.costBasis,
@@ -53,6 +54,8 @@ export function calculatePortfolioSummary(
     totalGainLoss !== null && totalCostBasis > 0
       ? (totalGainLoss / totalCostBasis) * 100
       : null;
+  const totalClubEquity =
+    totalMarketValue !== null ? totalMarketValue + clubCash : null;
 
   return {
     totalCostBasis,
@@ -60,6 +63,8 @@ export function calculatePortfolioSummary(
     totalGainLoss,
     totalGainLossPercent,
     holdingCount: holdings.length,
+    clubCash,
+    totalClubEquity,
   };
 }
 

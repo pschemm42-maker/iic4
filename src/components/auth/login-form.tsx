@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -13,6 +14,7 @@ export function LoginForm() {
   const [isPending, startTransition] = useTransition();
 
   const welcome = searchParams.get("welcome") === "1";
+  const reset = searchParams.get("reset") === "1";
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -41,6 +43,12 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-4">
+      {reset ? (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+          Your password was updated. Sign in with your new password.
+        </p>
+      ) : null}
+
       {welcome ? (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
           Your password was saved. Sign in to access the club.
@@ -61,7 +69,15 @@ export function LoginForm() {
       </label>
 
       <label className="grid gap-2 text-sm">
-        <span className="font-medium text-zinc-700 dark:text-zinc-300">Password</span>
+        <div className="flex items-center justify-between">
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">Password</span>
+          <Link
+            href="/auth/forgot-password"
+            className="text-sm font-medium text-teal-700 hover:text-teal-600 dark:text-teal-400"
+          >
+            Forgot password?
+          </Link>
+        </div>
         <input
           type="password"
           value={password}

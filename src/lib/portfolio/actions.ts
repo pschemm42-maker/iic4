@@ -865,3 +865,61 @@ export async function refreshAllQuotes(): Promise<PortfolioActionResult> {
     };
   }
 }
+
+export async function getClubCash(): Promise<PortfolioActionResult<number>> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("club_settings")
+      .select("club_cash")
+      .single();
+
+    if (error) {
+      return { success: false, error: formatSupabaseNetworkError(error) };
+    }
+
+    return { success: true, data: Number(data?.club_cash ?? 0) };
+  } catch (error) {
+    return { success: false, error: formatSupabaseNetworkError(error) };
+  }
+}
+
+export async function setClubCash(
+  value: number,
+): Promise<PortfolioActionResult<number>> {
+  const authError = await assertAdministrator();
+  if (authError) {
+    return authError;
+  }
+
+  if (!Number.isFinite(value) || value < 0) {
+    return {
+      success: false,
+      error: "Club cash must be a valid non-negative amount.",
+    };
+  }
+
+  try {
+    const supabase = await createClient();
+    const profile = await getCurrentProfile();
+
+    const { error } = await supabase
+      .from("club_settings")
+      .update({
+        club_cash: value,
+        club_cash_updated_at: new Date().toISOString(),
+        club_cash_updated_by: profile?.id ?? null,
+      })
+      .eq("id", true);
+
+    if (error) {
+      return { success: false, error: formatSupabaseNetworkError(error) };
+    }
+
+    revalidatePath("/portfolio");
+
+    return { success: true, data: value, message: "Club cash updated." };
+  } catch (error) {
+    return { success: false, error: formatSupabaseNetworkError(error) };
+  }
+}

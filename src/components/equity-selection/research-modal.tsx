@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { BrokerRecommendationsSection } from "@/components/equity-selection/broker-recommendations-section";
 import { ResearchScorecard } from "@/components/equity-selection/research-scorecard";
+import { YahooInsightsSection } from "@/components/equity-selection/yahoo-insights-section";
 import {
   captureStockResearch,
   getStockSuggestionResearch,
@@ -23,6 +24,12 @@ function formatResearchDate(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function compositeScoreColor(score: number) {
+  if (score >= 70) return "text-brand-teal-light";
+  if (score >= 50) return "text-amber-300";
+  return "text-orange-300";
 }
 
 export function ResearchModal({
@@ -93,15 +100,24 @@ export function ResearchModal({
     });
   }
 
+  const compositeScore =
+    research?.composite_score ??
+    suggestion.research_composite_score ??
+    null;
+  const coveragePct =
+    research?.data_coverage !== null && research?.data_coverage !== undefined
+      ? Math.round(research.data_coverage * 100)
+      : null;
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3"
       role="presentation"
     >
       <button
         type="button"
         aria-label="Close research modal"
-        className="absolute inset-0 bg-zinc-950/50"
+        className="absolute inset-0 bg-brand-navy/70"
         onClick={onClose}
         disabled={isPending}
       />
@@ -109,102 +125,126 @@ export function ResearchModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="research-modal-title"
-        className="relative z-10 flex max-h-[min(92vh,52rem)] w-full max-w-4xl flex-col rounded-2xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
+        className="relative z-10 flex h-[min(94vh,52rem)] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-white/10 bg-white shadow-2xl dark:bg-zinc-900"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-          <div>
-            <h2
-              id="research-modal-title"
-              className="text-lg font-semibold text-zinc-950 dark:text-zinc-50"
-            >
-              {suggestion.ticker} research
-            </h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              {suggestion.company_name || "Equity selection research review"}
-            </p>
+        {/* Brand header */}
+        <div className="relative shrink-0 overflow-hidden bg-brand-navy text-white">
+          <div className="brand-gradient-glow absolute inset-0" aria-hidden="true" />
+          <div className="brand-accent-bar h-0.5 w-full" aria-hidden="true" />
+          <div className="relative z-10 flex items-center justify-between gap-3 px-4 py-2.5">
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-amber-300/90">
+                Equity research
+              </p>
+              <h2
+                id="research-modal-title"
+                className="truncate text-lg font-semibold tracking-tight"
+              >
+                {suggestion.ticker}
+                {suggestion.company_name ? (
+                  <span className="ml-2 font-normal text-slate-300">
+                    {suggestion.company_name}
+                  </span>
+                ) : null}
+              </h2>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCaptureResearch}
+                disabled={isPending || isLoading}
+                className="rounded-md bg-brand-teal px-3 py-1 text-[13px] font-medium text-white transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isPending
+                  ? "Capturing…"
+                  : research
+                    ? "Recapture"
+                    : "Capture"}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isPending}
+                aria-label="Close"
+                className="rounded-md border border-white/20 px-2 py-1 text-[13px] text-slate-300 transition-colors hover:bg-white/10 disabled:opacity-60"
+              >
+                Close
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isPending}
-            aria-label="Close"
-            className="rounded-lg border border-zinc-300 px-2 py-1 text-sm text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          >
-            Close
-          </button>
+
+          {/* Composite score strip */}
+          {!isLoading ? (
+            <div className="relative z-10 flex flex-wrap items-baseline gap-x-4 gap-y-0.5 border-t border-white/10 px-4 py-2">
+              <div className="flex items-baseline gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                  Composite
+                </span>
+                <span
+                  className={`text-[26px] font-bold tabular-nums ${compositeScore !== null ? compositeScoreColor(compositeScore) : "text-slate-500"}`}
+                >
+                  {compositeScore !== null
+                    ? formatNumber(compositeScore, 1)
+                    : "—"}
+                </span>
+              </div>
+              {coveragePct !== null ? (
+                <span className="text-[12px] text-slate-400">
+                  {coveragePct}% data coverage
+                </span>
+              ) : null}
+              {research ? (
+                <span className="text-[12px] text-slate-500">
+                  {research.researcher_name} ·{" "}
+                  {formatResearchDate(research.updated_at)}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        <div className="overflow-auto px-6 py-5">
+        {/* Body — no scroll */}
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3">
           {isLoading ? (
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Loading research…
+            <p className="text-sm text-zinc-500">Loading research…</p>
+          ) : error ? (
+            <p className="rounded-md bg-red-50 px-2.5 py-1.5 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+              {error}
             </p>
-          ) : (
+          ) : research ? (
             <>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                    Research composite score
-                  </p>
-                  <p className="mt-1 text-4xl font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">
-                    {research
-                      ? formatNumber(research.composite_score, 1)
-                      : suggestion.research_composite_score !== null
-                        ? formatNumber(suggestion.research_composite_score, 1)
-                        : "—"}
-                  </p>
-                  {research ? (
-                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                      Captured by {research.researcher_name} on{" "}
-                      {formatResearchDate(research.updated_at)}
-                    </p>
-                  ) : null}
-                </div>
+              <ResearchScorecard research={research} compact />
 
-                <button
-                  type="button"
-                  onClick={handleCaptureResearch}
-                  disabled={isPending}
-                  className="rounded-lg bg-brand-teal px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isPending
-                    ? "Capturing research…"
-                    : research
-                      ? "Recapture research"
-                      : "Capture research"}
-                </button>
+              <div className="grid min-h-0 grid-cols-1 gap-2 lg:grid-cols-2">
+                <BrokerRecommendationsSection research={research} compact />
+                <YahooInsightsSection insights={research.yahoo_insights} />
               </div>
 
-              {error ? (
-                <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
-                  {error}
+              <section className="shrink-0 rounded-md border border-brand-gold/30 bg-amber-50/50 px-2.5 py-2 dark:border-amber-800/40 dark:bg-amber-950/20">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-brand-gold">
+                  Conclusion
                 </p>
-              ) : null}
-
-              {research ? (
-                <div className="mt-6 space-y-6">
-                  <ResearchScorecard research={research} />
-
-                  <BrokerRecommendationsSection research={research} />
-
-                  <section className="rounded-xl bg-zinc-50 px-4 py-4 dark:bg-zinc-950">
-                    <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                      Conclusion
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                      {research.conclusion}
-                    </p>
-                  </section>
-                </div>
-              ) : (
-                <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-                  No research has been captured yet. Use Capture research to
-                  compute statistical category scores from live financial
-                  metrics, pull analyst consensus, and generate a composite
-                  score with a short conclusion.
+                <p className="mt-0.5 line-clamp-3 text-[13px] leading-snug text-zinc-700 dark:text-zinc-300">
+                  {research.conclusion}
                 </p>
-              )}
+              </section>
             </>
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+              <p className="max-w-md text-sm text-zinc-500 dark:text-zinc-400">
+                No research captured yet. Capture to compute statistical
+                category scores, sell-side consensus, and Yahoo Finance targets,
+                trends, and news.
+              </p>
+              <button
+                type="button"
+                onClick={handleCaptureResearch}
+                disabled={isPending}
+                className="rounded-md bg-brand-teal px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-teal-400 disabled:opacity-60"
+              >
+                Capture research
+              </button>
+            </div>
           )}
         </div>
       </div>

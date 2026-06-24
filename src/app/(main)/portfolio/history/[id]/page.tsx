@@ -62,7 +62,10 @@ export default async function PortfolioSnapshotPage({
         </div>
       ) : (
         <>
-          <PortfolioSummaryCards holdings={holdings} />
+          <PortfolioSummaryCards
+            holdings={holdings}
+            clubCash={Number(snapshot.club_cash ?? 0)}
+          />
           <PortfolioTable
             holdings={holdings}
             isAdministrator={canManage}

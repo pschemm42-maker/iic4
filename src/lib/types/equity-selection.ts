@@ -24,6 +24,10 @@ export type StockSuggestionVote = {
 };
 
 import type { AnalysisDetail } from "@/lib/equity-selection/scoring";
+import type {
+  RecommendationTrendPeriod,
+  YahooInsights,
+} from "@/lib/market/types";
 
 export type StockSuggestionResearch = {
   id: string;
@@ -37,6 +41,8 @@ export type StockSuggestionResearch = {
   composite_score: number;
   data_coverage: number | null;
   analysis_detail: AnalysisDetail | null;
+  analyst_trends: RecommendationTrendPeriod[] | null;
+  yahoo_insights: YahooInsights | null;
   robinhood_recommendation: string;
   schwab_recommendation: string;
   fidelity_recommendation: string;

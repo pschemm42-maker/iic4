@@ -330,6 +330,8 @@ export async function captureStockResearch(
           composite_score: captured.composite_score,
           data_coverage: captured.data_coverage,
           analysis_detail: captured.analysis_detail,
+          analyst_trends: captured.analyst_trends,
+          yahoo_insights: captured.yahoo_insights,
           robinhood_recommendation: captured.robinhood_recommendation,
           schwab_recommendation: captured.schwab_recommendation,
           fidelity_recommendation: captured.fidelity_recommendation,

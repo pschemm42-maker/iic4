@@ -9,7 +9,10 @@ import {
   formatPercent,
   gainLossClassName,
 } from "@/lib/portfolio/metrics";
-import { deleteSnapshot } from "@/lib/portfolio/snapshot-actions";
+import {
+  deleteSnapshot,
+  updateSnapshotClubCash,
+} from "@/lib/portfolio/snapshot-actions";
 import type { PortfolioSnapshotSummary } from "@/lib/types/portfolio-snapshot";
 
 type SortColumn =
@@ -18,7 +21,9 @@ type SortColumn =
   | "totalCostBasis"
   | "totalMarketValue"
   | "totalGainLoss"
-  | "totalGainLossPercent";
+  | "totalGainLossPercent"
+  | "clubCash"
+  | "totalClubEquity";
 
 type SortDirection = "asc" | "desc";
 
@@ -68,6 +73,10 @@ function getSortValue(
       return snapshot.totalGainLoss;
     case "totalGainLossPercent":
       return snapshot.totalGainLossPercent;
+    case "clubCash":
+      return snapshot.clubCash;
+    case "totalClubEquity":
+      return snapshot.totalClubEquity;
     default:
       return null;
   }
@@ -102,6 +111,118 @@ function sortSnapshots(
 
     return multiplier * (Number(leftValue) - Number(rightValue));
   });
+}
+
+type SnapshotClubCashCellProps = {
+  snapshot: PortfolioSnapshotSummary;
+  disabled: boolean;
+};
+
+function SnapshotClubCashCell({ snapshot, disabled }: SnapshotClubCashCellProps) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [inputValue, setInputValue] = useState(String(snapshot.clubCash));
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleSave() {
+    const parsed = Number(inputValue.trim());
+
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setError("Enter a valid amount.");
+      return;
+    }
+
+    setError(null);
+
+    startTransition(async () => {
+      const result = await updateSnapshotClubCash(snapshot.id, parsed);
+
+      if (result.success) {
+        setEditing(false);
+        router.refresh();
+        return;
+      }
+
+      setError(result.error);
+    });
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      handleSave();
+    } else if (e.key === "Escape") {
+      setEditing(false);
+      setError(null);
+      setInputValue(String(snapshot.clubCash));
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">$</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={isPending || disabled}
+            autoFocus
+            className="w-24 rounded border border-zinc-300 bg-white px-2 py-0.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500/40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50"
+          />
+        </div>
+        {error ? (
+          <p className="text-[10px] text-red-600 dark:text-red-400">{error}</p>
+        ) : null}
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isPending || disabled}
+            className="rounded bg-teal-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-teal-700 disabled:opacity-60"
+          >
+            {isPending ? "…" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(false);
+              setError(null);
+              setInputValue(String(snapshot.clubCash));
+            }}
+            disabled={isPending || disabled}
+            className="rounded border border-zinc-300 px-2 py-0.5 text-[10px] font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group/cash flex items-baseline gap-1.5">
+      <span className="tabular-nums text-zinc-700 dark:text-zinc-300">
+        {formatCurrency(snapshot.clubCash)}
+      </span>
+      <button
+        type="button"
+        onClick={() => {
+          setInputValue(String(snapshot.clubCash));
+          setError(null);
+          setEditing(true);
+        }}
+        disabled={disabled}
+        className="rounded px-1 py-0.5 text-[10px] font-medium text-zinc-400 opacity-0 transition-opacity hover:bg-zinc-100 hover:text-zinc-600 group-hover/cash:opacity-100 disabled:opacity-0 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+      >
+        Edit
+      </button>
+    </div>
+  );
 }
 
 export function SnapshotHistoryTable({
@@ -164,91 +285,112 @@ export function SnapshotHistoryTable({
     );
   }
 
+  const columns: Array<[string, SortColumn]> = [
+    ["Snapshot date", "snapshot_date"],
+    ["Holdings", "holdingCount"],
+    ["Total cost", "totalCostBasis"],
+    ["Market value", "totalMarketValue"],
+    ["Total gain/loss", "totalGainLoss"],
+    ["Total return", "totalGainLossPercent"],
+    ["Club cash", "clubCash"],
+    ["Total club equity", "totalClubEquity"],
+  ];
+
   return (
     <BrandCard accent className="overflow-hidden">
-      <table className="w-full text-left text-sm">
-        <thead className="bg-brand-navy/[0.03] text-zinc-500 dark:bg-brand-navy/20 dark:text-zinc-400">
-          <tr>
-            {[
-              ["Snapshot date", "snapshot_date"],
-              ["Holdings", "holdingCount"],
-              ["Total cost", "totalCostBasis"],
-              ["Market value", "totalMarketValue"],
-              ["Total gain/loss", "totalGainLoss"],
-              ["Total return", "totalGainLossPercent"],
-            ].map(([label, column]) => (
-              <th key={column} className="px-4 py-3 font-medium">
-                <button
-                  type="button"
-                  onClick={() => handleSort(column as SortColumn)}
-                  className="inline-flex items-center gap-1 hover:text-zinc-800 dark:hover:text-zinc-200"
-                >
-                  {label}
-                  {sortColumn === column ? (
-                    <span aria-hidden="true">
-                      {sortDirection === "asc" ? "↑" : "↓"}
-                    </span>
-                  ) : null}
-                </button>
-              </th>
-            ))}
-            {isAdministrator ? (
-              <th className="px-4 py-3 font-medium">
-                <span className="sr-only">Actions</span>
-              </th>
-            ) : null}
-          </tr>
-        </thead>
-        <tbody>
-          {sortedSnapshots.map((snapshot) => (
-            <tr
-              key={snapshot.id}
-              className="border-t border-zinc-200 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/40"
-            >
-              <td className="px-4 py-3 font-medium">
-                <Link
-                  href={`/portfolio/history/${snapshot.id}`}
-                  className="text-brand-navy underline decoration-zinc-300 underline-offset-2 hover:text-teal-700 dark:text-zinc-50 dark:hover:text-teal-400"
-                >
-                  {formatSnapshotDate(snapshot.snapshot_date)}
-                </Link>
-              </td>
-              <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300">
-                {snapshot.holdingCount}
-              </td>
-              <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300">
-                {formatCurrency(snapshot.totalCostBasis)}
-              </td>
-              <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300">
-                {formatCurrency(snapshot.totalMarketValue)}
-              </td>
-              <td
-                className={`px-4 py-3 tabular-nums font-medium ${gainLossClassName(snapshot.totalGainLoss)}`}
-              >
-                {formatCurrency(snapshot.totalGainLoss)}
-              </td>
-              <td
-                className={`px-4 py-3 tabular-nums font-medium ${gainLossClassName(snapshot.totalGainLossPercent)}`}
-              >
-                {formatPercent(snapshot.totalGainLossPercent)}
-              </td>
-              {isAdministrator ? (
-                <td className="px-4 py-3">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[960px] text-left text-sm">
+          <thead className="bg-brand-navy/[0.03] text-zinc-500 dark:bg-brand-navy/20 dark:text-zinc-400">
+            <tr>
+              {columns.map(([label, column]) => (
+                <th key={column} className="px-4 py-3 font-medium">
                   <button
                     type="button"
-                    disabled={isPending}
-                    onClick={(event) => handleDelete(event, snapshot)}
-                    aria-label={`Delete snapshot for ${formatSnapshotDate(snapshot.snapshot_date)}`}
-                    className="rounded border border-red-300 p-1 text-red-700 transition-colors hover:bg-red-50 disabled:opacity-60 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40"
+                    onClick={() => handleSort(column)}
+                    className="inline-flex items-center gap-1 hover:text-zinc-800 dark:hover:text-zinc-200"
                   >
-                    <TrashIcon />
+                    {label}
+                    {sortColumn === column ? (
+                      <span aria-hidden="true">
+                        {sortDirection === "asc" ? "↑" : "↓"}
+                      </span>
+                    ) : null}
                   </button>
-                </td>
+                </th>
+              ))}
+              {isAdministrator ? (
+                <th className="px-4 py-3 font-medium">
+                  <span className="sr-only">Actions</span>
+                </th>
               ) : null}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {sortedSnapshots.map((snapshot) => (
+              <tr
+                key={snapshot.id}
+                className="border-t border-zinc-200 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/40"
+              >
+                <td className="px-4 py-3 font-medium">
+                  <Link
+                    href={`/portfolio/history/${snapshot.id}`}
+                    className="text-brand-navy underline decoration-zinc-300 underline-offset-2 hover:text-teal-700 dark:text-zinc-50 dark:hover:text-teal-400"
+                  >
+                    {formatSnapshotDate(snapshot.snapshot_date)}
+                  </Link>
+                </td>
+                <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300">
+                  {snapshot.holdingCount}
+                </td>
+                <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300">
+                  {formatCurrency(snapshot.totalCostBasis)}
+                </td>
+                <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300">
+                  {formatCurrency(snapshot.totalMarketValue)}
+                </td>
+                <td
+                  className={`px-4 py-3 tabular-nums font-medium ${gainLossClassName(snapshot.totalGainLoss)}`}
+                >
+                  {formatCurrency(snapshot.totalGainLoss)}
+                </td>
+                <td
+                  className={`px-4 py-3 tabular-nums font-medium ${gainLossClassName(snapshot.totalGainLossPercent)}`}
+                >
+                  {formatPercent(snapshot.totalGainLossPercent)}
+                </td>
+                <td className="px-4 py-3">
+                  {isAdministrator ? (
+                    <SnapshotClubCashCell
+                      snapshot={snapshot}
+                      disabled={isPending}
+                    />
+                  ) : (
+                    <span className="tabular-nums text-zinc-700 dark:text-zinc-300">
+                      {formatCurrency(snapshot.clubCash)}
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-3 tabular-nums font-medium text-brand-navy dark:text-zinc-50">
+                  {formatCurrency(snapshot.totalClubEquity)}
+                </td>
+                {isAdministrator ? (
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={(event) => handleDelete(event, snapshot)}
+                      aria-label={`Delete snapshot for ${formatSnapshotDate(snapshot.snapshot_date)}`}
+                      className="rounded border border-red-300 p-1 text-red-700 transition-colors hover:bg-red-50 disabled:opacity-60 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </td>
+                ) : null}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </BrandCard>
   );
 }

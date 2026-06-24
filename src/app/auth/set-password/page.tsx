@@ -1,20 +1,12 @@
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { AuthShell } from "@/components/brand/auth-shell";
 import { SetPasswordForm } from "@/components/auth/set-password-form";
-import { getCurrentUser } from "@/lib/auth/session";
 
-export default async function SetPasswordPage() {
-  const user = await getCurrentUser();
-
-  if (user) {
-    redirect("/dashboard");
-  }
-
+export default function SetPasswordPage() {
   return (
     <AuthShell
       title="Set your password"
-      description="Create or reset your password to access your member account."
+      description="Create your password to access your member account."
     >
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading...</p>}>
         <SetPasswordForm />

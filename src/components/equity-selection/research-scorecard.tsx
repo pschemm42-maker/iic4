@@ -6,14 +6,14 @@ import {
 } from "@/lib/types/equity-selection";
 
 function scoreColor(score: number) {
-  if (score >= 70) return "text-teal-700 dark:text-teal-400";
-  if (score >= 50) return "text-amber-700 dark:text-amber-400";
-  if (score >= 35) return "text-orange-700 dark:text-orange-400";
-  return "text-red-700 dark:text-red-400";
+  if (score >= 70) return "text-brand-teal";
+  if (score >= 50) return "text-amber-600";
+  if (score >= 35) return "text-orange-600";
+  return "text-red-600";
 }
 
 function scoreBarColor(score: number) {
-  if (score >= 70) return "bg-teal-500";
+  if (score >= 70) return "bg-brand-teal";
   if (score >= 50) return "bg-amber-500";
   if (score >= 35) return "bg-orange-500";
   return "bg-red-500";
@@ -54,7 +54,7 @@ function ComponentRow({ component }: { component: ScoreComponent }) {
   const missing = component.score === null;
 
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5 text-xs">
+    <div className="flex items-center justify-between gap-2 py-0.5 text-[10px]">
       <span
         className={
           missing
@@ -65,17 +65,13 @@ function ComponentRow({ component }: { component: ScoreComponent }) {
       >
         {component.label}
       </span>
-      <span className="flex items-center gap-2 tabular-nums">
-        <span className="text-zinc-500 dark:text-zinc-500">
-          {formatComponentValue(component)}
-        </span>
+      <span className="flex items-center gap-1.5 tabular-nums">
+        <span className="text-zinc-500">{formatComponentValue(component)}</span>
         {missing ? (
-          <span className="w-9 text-right text-zinc-400 dark:text-zinc-600">
-            —
-          </span>
+          <span className="w-7 text-right text-zinc-400">—</span>
         ) : (
           <span
-            className={`w-9 text-right font-medium ${scoreColor(component.score ?? 0)}`}
+            className={`w-7 text-right font-medium ${scoreColor(component.score ?? 0)}`}
           >
             {formatNumber(component.score ?? 0, 0)}
           </span>
@@ -85,16 +81,74 @@ function ComponentRow({ component }: { component: ScoreComponent }) {
   );
 }
 
+function CompactCategoryCard({
+  label,
+  score,
+  rationale,
+}: {
+  label: string;
+  score: number;
+  rationale: string | null;
+}) {
+  return (
+    <div className="rounded-md border border-zinc-200 bg-white px-2.5 py-2 dark:border-zinc-700 dark:bg-zinc-900/60">
+      <div className="flex items-baseline justify-between gap-1">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+          {label}
+        </p>
+        <p className={`text-base font-semibold tabular-nums ${scoreColor(score)}`}>
+          {formatNumber(score, 0)}
+        </p>
+      </div>
+      <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+        <div
+          className={`h-full rounded-full ${scoreBarColor(score)}`}
+          style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
+        />
+      </div>
+      {rationale ? (
+        <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-zinc-600 dark:text-zinc-400">
+          {rationale}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function ResearchScorecard({
   research,
+  compact = false,
 }: {
   research: StockSuggestionResearch;
+  compact?: boolean;
 }) {
   const detail = research.analysis_detail;
   const coveragePct =
     research.data_coverage !== null
       ? Math.round(research.data_coverage * 100)
       : null;
+
+  if (compact) {
+    return (
+      <section className="grid grid-cols-3 gap-2">
+        {RESEARCH_SCORE_CATEGORIES.map((category) => {
+          const score = research[category.key];
+          const categoryDetail = detail?.categories.find(
+            (c) => c.key === category.key,
+          );
+
+          return (
+            <CompactCategoryCard
+              key={category.key}
+              label={category.label}
+              score={score}
+              rationale={categoryDetail?.rationale ?? null}
+            />
+          );
+        })}
+      </section>
+    );
+  }
 
   return (
     <section>
@@ -155,7 +209,7 @@ export function ResearchScorecard({
 
               {categoryDetail && categoryDetail.components.length > 0 ? (
                 <details className="mt-2 group">
-                  <summary className="cursor-pointer text-[11px] font-medium text-teal-700 hover:text-teal-600 dark:text-teal-400">
+                  <summary className="cursor-pointer text-[11px] font-medium text-brand-teal hover:text-teal-600">
                     Metric breakdown
                   </summary>
                   <div className="mt-1 divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-zinc-800 dark:border-zinc-800">

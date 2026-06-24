@@ -13,16 +13,13 @@ import {
   fetchFinancialMetrics,
   fetchRecommendationTrends,
 } from "@/lib/market/finnhub";
+import { fetchYahooInsights } from "@/lib/market/yahoo";
 import type {
   FinancialMetrics,
   RecommendationTrendPeriod,
+  YahooInsights,
 } from "@/lib/market/types";
 import type { StockSuggestion } from "@/lib/types/equity-selection";
-
-type GeminiBrokerPayload = {
-  grade: string;
-  takeaway: string;
-};
 
 export type CapturedStockResearch = {
   score_value: number;
@@ -38,53 +35,9 @@ export type CapturedStockResearch = {
   schwab_recommendation: string;
   fidelity_recommendation: string;
   conclusion: string;
+  analyst_trends: RecommendationTrendPeriod[] | null;
+  yahoo_insights: YahooInsights | null;
 };
-
-function parseText(value: unknown, label: string) {
-  const text = String(value ?? "").trim();
-  if (!text) {
-    throw new Error(`Missing ${label} from Gemini.`);
-  }
-
-  return text;
-}
-
-function parseBrokerPayload(
-  value: unknown,
-  platform: string,
-): BrokerResearchRating {
-  if (!value || typeof value !== "object") {
-    throw new Error(`Missing ${platform} broker rating from Gemini.`);
-  }
-
-  const payload = value as GeminiBrokerPayload;
-
-  return {
-    grade: parseText(payload.grade, `${platform} grade`),
-    takeaway: parseText(payload.takeaway, `${platform} takeaway`),
-  };
-}
-
-function extractJsonFromText(raw: string) {
-  const trimmed = raw.trim();
-
-  if (trimmed.startsWith("{")) {
-    return trimmed;
-  }
-
-  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fencedMatch?.[1]) {
-    return fencedMatch[1].trim();
-  }
-
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start >= 0 && end > start) {
-    return trimmed.slice(start, end + 1);
-  }
-
-  throw new Error("Gemini returned data in an invalid format.");
-}
 
 function buildRobinhoodGradeFromFinnhub(
   trends: RecommendationTrendPeriod[],
@@ -121,84 +74,24 @@ function buildUnavailableBrokerRating(
   };
 }
 
-async function fetchBrokerGradeFromSearch(
-  ticker: string,
-  platform: "schwab" | "fidelity",
-): Promise<BrokerResearchRating> {
-  const config =
-    platform === "schwab"
-      ? {
-          name: "Charles Schwab",
-          metric: "Schwab Equity Rating (A-F)",
-          fallback: buildUnavailableBrokerRating(
-            "Schwab",
-            "Schwab Equity Rating",
-          ),
-        }
-      : {
-          name: "Fidelity",
-          metric: "Equity Summary Score",
-          fallback: buildUnavailableBrokerRating(
-            "Fidelity",
-            "Equity Summary Score",
-          ),
-        };
-
-  const result = await generateGeminiContent({
-    model: "flash",
-    useGoogleSearch: true,
-    systemInstruction:
-      "Use Google Search. Respond with valid JSON only. Do not guess proprietary broker grades.",
-    prompt: [
-      `Find the current ${config.metric} for ${ticker} on ${config.name}.`,
-      "",
-      "Important:",
-      `- ${config.name} usually shows this rating only after client login.`,
-      "- Only return a numeric or letter grade if you find a current public page that states it for this exact ticker.",
-      '- If you cannot verify a current public grade, return grade "Unavailable".',
-      "",
-      'Return JSON only: {"grade":"...","takeaway":"..."}',
-    ].join("\n"),
-  });
-
-  if (!result.success) {
-    return config.fallback;
-  }
-
-  try {
-    const parsed = parseGeminiPayloadBrokerOnly(result.data.text, config.name);
-    if (parsed.grade.toLowerCase() === "unavailable") {
-      return config.fallback;
-    }
-
-    return parsed;
-  } catch {
-    return config.fallback;
-  }
-}
-
-function parseGeminiPayloadBrokerOnly(raw: string, platform: string) {
-  const payload = JSON.parse(extractJsonFromText(raw)) as GeminiBrokerPayload;
-  return parseBrokerPayload(payload, platform);
-}
-
 async function resolveBrokerRecommendations(
   suggestion: StockSuggestion,
 ): Promise<{
   robinhood: BrokerResearchRating;
   schwab: BrokerResearchRating;
   fidelity: BrokerResearchRating;
+  analystTrends: RecommendationTrendPeriod[] | null;
 }> {
-  const [finnhubTrends, schwab, fidelity] = await Promise.all([
-    fetchRecommendationTrends(suggestion.ticker),
-    fetchBrokerGradeFromSearch(suggestion.ticker, "schwab"),
-    fetchBrokerGradeFromSearch(suggestion.ticker, "fidelity"),
-  ]);
+  const finnhubTrends = await fetchRecommendationTrends(suggestion.ticker);
 
-  const robinhoodFromFinnhub =
-    finnhubTrends.success && finnhubTrends.data
-      ? buildRobinhoodGradeFromFinnhub(finnhubTrends.data)
+  const analystTrends =
+    finnhubTrends.success && finnhubTrends.data.length > 0
+      ? finnhubTrends.data
       : null;
+
+  const robinhoodFromFinnhub = analystTrends
+    ? buildRobinhoodGradeFromFinnhub(analystTrends)
+    : null;
 
   const robinhood =
     robinhoodFromFinnhub ??
@@ -208,7 +101,12 @@ async function resolveBrokerRecommendations(
         "Finnhub analyst recommendation data was not available for this ticker.",
     } satisfies BrokerResearchRating);
 
-  return { robinhood, schwab, fidelity };
+  return {
+    robinhood,
+    schwab: buildUnavailableBrokerRating("Schwab", "Schwab Equity Rating"),
+    fidelity: buildUnavailableBrokerRating("Fidelity", "Equity Summary Score"),
+    analystTrends,
+  };
 }
 
 function formatMetricForPrompt(
@@ -219,11 +117,88 @@ function formatMetricForPrompt(
   return `- ${label}: ${value === null ? "n/a" : `${value}${suffix}`}`;
 }
 
+function formatLargeUsd(value: number | null) {
+  if (value === null) {
+    return "n/a";
+  }
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000_000) {
+    return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  }
+  if (abs >= 1_000_000) {
+    return `$${(value / 1_000_000).toFixed(2)}M`;
+  }
+  return `$${value.toFixed(2)}`;
+}
+
+function buildYahooContext(yahoo: YahooInsights | null): string {
+  if (!yahoo || !yahoo.available) {
+    return "Yahoo Finance market context: not available for this ticker.";
+  }
+
+  const lines: string[] = ["Yahoo Finance market context:"];
+
+  const pt = yahoo.priceTarget;
+  if (pt) {
+    const parts: string[] = [];
+    if (pt.recommendationKey) {
+      parts.push(`analyst rating ${pt.recommendationKey.replace(/_/g, " ")}`);
+    }
+    if (pt.analystCount !== null) {
+      parts.push(`${pt.analystCount} analysts`);
+    }
+    if (pt.mean !== null) {
+      parts.push(`mean target $${pt.mean.toFixed(2)}`);
+    }
+    if (pt.upsidePct !== null) {
+      parts.push(`${pt.upsidePct >= 0 ? "+" : ""}${pt.upsidePct}% vs current`);
+    }
+    if (parts.length > 0) {
+      lines.push(`- Price target: ${parts.join(", ")}.`);
+    }
+  }
+
+  const trend = yahoo.trend;
+  if (trend) {
+    const parts: string[] = [];
+    if (trend.rangePositionPct !== null) {
+      parts.push(`${trend.rangePositionPct}% of 52-week range`);
+    }
+    if (trend.return1moPct !== null) {
+      parts.push(`1mo ${trend.return1moPct >= 0 ? "+" : ""}${trend.return1moPct}%`);
+    }
+    if (trend.return6moPct !== null) {
+      parts.push(`6mo ${trend.return6moPct >= 0 ? "+" : ""}${trend.return6moPct}%`);
+    }
+    if (parts.length > 0) {
+      lines.push(`- Price trend: ${parts.join(", ")}.`);
+    }
+  }
+
+  const nextYear = yahoo.forwardEstimates.find((e) => e.label === "Next year");
+  const estimate = nextYear ?? yahoo.forwardEstimates[0];
+  if (estimate) {
+    lines.push(
+      `- Forward estimate (${estimate.label}): EPS ${estimate.epsAvg !== null ? `$${estimate.epsAvg.toFixed(2)}` : "n/a"}, revenue ${formatLargeUsd(estimate.revenueAvg)}${estimate.growthPct !== null ? `, growth ${estimate.growthPct}%` : ""}.`,
+    );
+  }
+
+  if (yahoo.news.length > 0) {
+    lines.push("- Recent headlines:");
+    for (const item of yahoo.news.slice(0, 3)) {
+      lines.push(`  • ${item.title} (${item.publisher})`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
 function buildConclusionContext(
   suggestion: StockSuggestion,
   metrics: FinancialMetrics,
   detail: AnalysisDetail,
   composite: number,
+  yahoo: YahooInsights | null,
 ) {
   const categoryLines = detail.categories.map(
     (c) =>
@@ -245,6 +220,8 @@ function buildConclusionContext(
     formatMetricForPrompt("P/E (TTM)", metrics.peTTM),
     formatMetricForPrompt("Debt/equity", metrics.debtToEquity),
     formatMetricForPrompt("Beta", metrics.beta),
+    "",
+    buildYahooContext(yahoo),
   ].join("\n");
 }
 
@@ -253,21 +230,29 @@ async function buildConclusion(
   metrics: FinancialMetrics,
   detail: AnalysisDetail,
   composite: number,
+  yahoo: YahooInsights | null,
   fallback: string,
 ): Promise<string> {
-  const context = buildConclusionContext(suggestion, metrics, detail, composite);
+  const context = buildConclusionContext(
+    suggestion,
+    metrics,
+    detail,
+    composite,
+    yahoo,
+  );
 
   const result = await generateGeminiContent({
     model: "flash",
     systemInstruction: [
       "You are an equity research assistant for a private investment club.",
-      "You are given category scores and metrics that were computed statistically.",
+      "You are given statistically-computed category scores, key metrics, and Yahoo Finance market context (analyst targets, price trend, forward estimates, recent news).",
       "Do NOT invent or contradict the numbers. Summarize them faithfully.",
-      "Respond with 2-3 plain-text sentences. No markdown, no headings.",
+      "Respond with 3-4 plain-text sentences. No markdown, no headings.",
     ].join(" "),
     prompt: [
-      "Write a short, defensible conclusion that summarizes this scorecard for club members.",
-      "Explain the overall takeaway and call out the strongest and weakest categories.",
+      "Write a short, defensible conclusion for club members that ties the scorecard to current market context.",
+      "Cover: the overall takeaway and strongest/weakest categories; the analyst price target and rating; the recent price trend; and any notable theme from the headlines.",
+      "If a piece of context is unavailable, simply omit it rather than mentioning its absence.",
       "",
       context,
     ].join("\n"),
@@ -287,10 +272,12 @@ export async function captureStockResearchWithGemini(
   | { success: true; data: CapturedStockResearch }
   | { success: false; error: string }
 > {
-  const [metricsResult, brokerRecommendations] = await Promise.all([
-    fetchFinancialMetrics(suggestion.ticker),
-    resolveBrokerRecommendations(suggestion),
-  ]);
+  const [metricsResult, brokerRecommendations, yahooInsights] =
+    await Promise.all([
+      fetchFinancialMetrics(suggestion.ticker),
+      resolveBrokerRecommendations(suggestion),
+      fetchYahooInsights(suggestion.ticker),
+    ]);
 
   if (!metricsResult.success) {
     return {
@@ -313,6 +300,7 @@ export async function captureStockResearchWithGemini(
     metrics,
     scorecard.detail,
     scorecard.composite_score,
+    yahooInsights.available ? yahooInsights : null,
     fallbackConclusion,
   );
 
@@ -336,6 +324,8 @@ export async function captureStockResearchWithGemini(
         brokerRecommendations.fidelity,
       ),
       conclusion,
+      analyst_trends: brokerRecommendations.analystTrends,
+      yahoo_insights: yahooInsights.available ? yahooInsights : null,
     },
   };
 }

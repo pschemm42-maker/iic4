@@ -12,13 +12,17 @@ import {
   requireAuth,
 } from "@/lib/auth/session";
 import { enrichHoldings } from "@/lib/portfolio/metrics";
-import { listHoldings } from "@/lib/portfolio/actions";
+import { listHoldings, getClubCash } from "@/lib/portfolio/actions";
 
 export default async function PortfolioPage() {
   await requireAuth();
   const profile = await getCurrentProfile();
   const canManage = isAdministrator(profile);
-  const holdingsResult = await listHoldings();
+  const [holdingsResult, clubCashResult] = await Promise.all([
+    listHoldings(),
+    getClubCash(),
+  ]);
+  const clubCash = clubCashResult.success ? (clubCashResult.data ?? 0) : 0;
 
   const holdings =
     holdingsResult.success && holdingsResult.data
@@ -59,7 +63,11 @@ export default async function PortfolioPage() {
         </div>
       ) : (
         <>
-          <PortfolioSummaryCards holdings={holdings} />
+          <PortfolioSummaryCards
+            holdings={holdings}
+            clubCash={clubCash}
+            isAdministrator={canManage}
+          />
           {canManage ? <AddHoldingForm /> : null}
           <PortfolioTable holdings={holdings} isAdministrator={canManage} />
         </>

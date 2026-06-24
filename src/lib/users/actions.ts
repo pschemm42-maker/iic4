@@ -26,7 +26,7 @@ function getInviteRedirectUrl() {
 }
 
 function getPasswordResetRedirectUrl() {
-  return `${getSiteUrl()}/auth/confirm?next=/auth/set-password`;
+  return `${getSiteUrl()}/auth/confirm?next=${encodeURIComponent("/auth/reset-password")}`;
 }
 
 async function assertAdminWithCredentials(): Promise<

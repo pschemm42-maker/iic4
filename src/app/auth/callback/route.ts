@@ -17,9 +17,9 @@ export async function GET(request: NextRequest) {
 
   if (!error) {
     const redirectTo = request.nextUrl.clone();
-    redirectTo.pathname = next;
-    redirectTo.searchParams.delete("code");
-    redirectTo.searchParams.delete("next");
+    const nextUrl = new URL(next, request.nextUrl.origin);
+    redirectTo.pathname = nextUrl.pathname;
+    redirectTo.search = nextUrl.search;
     return NextResponse.redirect(redirectTo);
   }
 

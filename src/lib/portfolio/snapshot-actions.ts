@@ -13,6 +13,7 @@ import {
   calculatePortfolioSummary,
 } from "@/lib/portfolio/metrics";
 import { createClient } from "@/lib/supabase/server";
+import { getClubCash } from "@/lib/portfolio/actions";
 import type { PortfolioHolding } from "@/lib/types/portfolio";
 import type {
   PortfolioSnapshot,
@@ -211,7 +212,7 @@ function buildSnapshotSummary(
   const enriched = portfolioHoldings.map((holding) =>
     calculateHoldingMetrics(holding, totalMarketValue),
   );
-  const summary = calculatePortfolioSummary(enriched);
+  const summary = calculatePortfolioSummary(enriched, Number(snapshot.club_cash ?? 0));
 
   return {
     ...snapshot,
@@ -239,6 +240,7 @@ async function replaceSnapshot(
   snapshotDate: string,
   createdBy: string | null,
   holdings: SnapshotHoldingSeed[],
+  clubCash = 0,
 ): Promise<SnapshotActionResult<PortfolioSnapshot>> {
   const { error: deleteError } = await supabase
     .from("portfolio_snapshots")
@@ -254,6 +256,7 @@ async function replaceSnapshot(
     .insert({
       snapshot_date: snapshotDate,
       created_by: createdBy,
+      club_cash: clubCash,
     })
     .select("*")
     .single();
@@ -495,7 +498,10 @@ export async function saveCurrentSnapshot(): Promise<SnapshotActionResult<Portfo
   try {
     const supabase = await createClient();
     const profile = await getCurrentProfile();
-    const holdingsResult = await loadLiveHoldingsWithPurchases(supabase);
+    const [holdingsResult, clubCashResult] = await Promise.all([
+      loadLiveHoldingsWithPurchases(supabase),
+      getClubCash(),
+    ]);
 
     if (!holdingsResult.success || !holdingsResult.data) {
       return {
@@ -510,6 +516,7 @@ export async function saveCurrentSnapshot(): Promise<SnapshotActionResult<Portfo
       return { success: false, error: "No holdings to snapshot." };
     }
 
+    const clubCash = clubCashResult.success ? (clubCashResult.data ?? 0) : 0;
     const snapshotDate = todayDateString();
     const seeds: SnapshotHoldingSeed[] = holdingsResult.data.map((holding) => ({
       ticker: holding.ticker,
@@ -536,6 +543,7 @@ export async function saveCurrentSnapshot(): Promise<SnapshotActionResult<Portfo
       snapshotDate,
       profile?.id ?? null,
       seeds,
+      clubCash,
     );
 
     if (!result.success) {
@@ -979,6 +987,54 @@ export async function removeSnapshotHolding(
     }
 
     return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: formatSupabaseNetworkError(error),
+    };
+  }
+}
+
+export async function updateSnapshotClubCash(
+  snapshotId: string,
+  value: number,
+): Promise<SnapshotActionResult<number>> {
+  const authError = await assertAdministrator();
+  if (authError) {
+    return authError;
+  }
+
+  if (!snapshotId) {
+    return { success: false, error: "Snapshot is required." };
+  }
+
+  if (!Number.isFinite(value) || value < 0) {
+    return {
+      success: false,
+      error: "Club cash must be a valid non-negative amount.",
+    };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("portfolio_snapshots")
+      .update({ club_cash: value })
+      .eq("id", snapshotId)
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      return { success: false, error: formatSupabaseNetworkError(error) };
+    }
+
+    if (!data) {
+      return { success: false, error: "Snapshot not found." };
+    }
+
+    revalidateSnapshotPaths(snapshotId);
+
+    return { success: true, data: value, message: "Club cash updated." };
   } catch (error) {
     return {
       success: false,

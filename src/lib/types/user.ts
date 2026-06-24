@@ -12,6 +12,10 @@ export type UserProfile = {
   full_name: string;
   role: UserRole;
   status: UserStatus;
+  about: string;
+  position: string;
+  basis: number | null;
+  basis_last_edited: string | null;
   created_at: string;
   updated_at: string;
 };

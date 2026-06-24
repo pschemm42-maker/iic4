@@ -4,17 +4,17 @@ import { NextResponse, type NextRequest } from "next/server";
 
 function getRedirectTarget(request: NextRequest, next: string) {
   const redirectTo = request.nextUrl.clone();
-  redirectTo.pathname = next;
-  redirectTo.searchParams.delete("token_hash");
-  redirectTo.searchParams.delete("type");
-  redirectTo.searchParams.delete("code");
-  redirectTo.searchParams.delete("next");
+  const nextUrl = new URL(next, request.nextUrl.origin);
+  redirectTo.pathname = nextUrl.pathname;
+  redirectTo.search = nextUrl.search;
   return redirectTo;
 }
 
-function authErrorRedirect(request: NextRequest) {
+function authErrorRedirect(request: NextRequest, next: string) {
   const redirectTo = request.nextUrl.clone();
-  redirectTo.pathname = "/auth/set-password";
+  redirectTo.pathname = next.includes("reset-password")
+    ? "/auth/reset-password"
+    : "/auth/set-password";
   redirectTo.search = "error=auth";
   return NextResponse.redirect(redirectTo);
 }
@@ -47,5 +47,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return authErrorRedirect(request);
+  return authErrorRedirect(request, next);
 }
