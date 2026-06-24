@@ -2,11 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BrandCard } from "@/components/brand/brand-card";
 import { PageBanner } from "@/components/brand/page-banner";
-import {
-  getCurrentProfile,
-  getCurrentUser,
-  isAdministrator,
-} from "@/lib/auth/session";
+import { MessagePanel } from "@/components/dashboard/message-panel";
+import { listDashboardMessages } from "@/lib/dashboard/actions";
+import { getCurrentUser } from "@/lib/auth/session";
 
 const cards = [
   {
@@ -42,8 +40,9 @@ export default async function DashboardPage() {
     redirect("/auth/login");
   }
 
-  const profile = await getCurrentProfile();
-  const showUsers = isAdministrator(profile);
+  const messagesResult = await listDashboardMessages();
+  const messages =
+    messagesResult.success && messagesResult.data ? messagesResult.data : [];
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6">
@@ -86,16 +85,13 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      {showUsers ? (
-        <div>
-          <Link
-            href="/users"
-            className="text-sm font-medium text-brand-teal transition-colors hover:text-teal-600 dark:text-teal-400"
-          >
-            Manage users →
-          </Link>
+      {messagesResult.success ? (
+        <MessagePanel messages={messages} />
+      ) : (
+        <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+          {messagesResult.error}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
