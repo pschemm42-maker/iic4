@@ -15,6 +15,24 @@ export type BatchQuoteResult = {
   failed: Array<{ ticker: string; error: string }>;
 };
 
+export type MetricsResult =
+  | {
+      success: true;
+      ticker: string;
+      peRatio: number | null;
+      dividendYield: number | null;
+    }
+  | { success: false; ticker: string; error: string };
+
+export type BatchMetricsResult = {
+  succeeded: Array<{
+    ticker: string;
+    peRatio: number | null;
+    dividendYield: number | null;
+  }>;
+  failed: Array<{ ticker: string; error: string }>;
+};
+
 export type FinnhubResult<T> =
   | { success: true; data: T }
   | { success: false; error: string };

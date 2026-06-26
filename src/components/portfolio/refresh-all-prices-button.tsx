@@ -51,7 +51,8 @@ function MarketDataTooltip({
       >
         <p className="font-medium text-zinc-950 dark:text-zinc-50">Market data</p>
         <p className="mt-1 leading-5 text-zinc-600 dark:text-zinc-400">
-          Updates current price for every holding (~1 API call each).
+          Refreshes current price, P/E, and dividend yield for every holding from
+          Finnhub (~2 API calls each, queued at 60 requests per minute).
         </p>
         {lastUpdatedAt ? (
           <p className="mt-2 text-xs text-zinc-500">
@@ -85,7 +86,7 @@ export function RefreshAllPricesButton({
       const result = await refreshAllQuotes();
 
       if (result.success) {
-        setMessage(result.message ?? "Prices refreshed.");
+        setMessage(result.message ?? "Market data refreshed.");
         return;
       }
 
@@ -107,7 +108,7 @@ export function RefreshAllPricesButton({
               : "border-zinc-300 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
           }`}
         >
-          {isPending ? "Refreshing prices..." : "Refresh all prices"}
+          {isPending ? "Refreshing market data..." : "Refresh market data"}
         </button>
       </div>
 

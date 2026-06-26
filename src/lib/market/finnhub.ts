@@ -1,10 +1,13 @@
 import { getFinnhubApiKey } from "@/lib/env";
+import { acquireFinnhubSlot } from "@/lib/market/finnhub-rate-limiter";
 import { fetchYahooDailyClose } from "@/lib/market/yahoo";
 import type {
+  BatchMetricsResult,
   BatchQuoteResult,
   FinancialMetrics,
   FinnhubResult,
   HoldingMarketData,
+  MetricsResult,
   QuoteResult,
   RecommendationTrendPeriod,
 } from "@/lib/market/types";
@@ -34,6 +37,7 @@ async function finnhubFetch(
   const url = `${FINNHUB_BASE}${path}${path.includes("?") ? "&" : "?"}token=${token}`;
 
   try {
+    await acquireFinnhubSlot();
     const response = await fetch(url, { cache: "no-store" });
 
     if (response.status === 429 && retryOn429) {
@@ -353,9 +357,51 @@ export async function fetchQuotesBatched(
         failed.push({ ticker: result.ticker, error: result.error });
       }
     }
+  }
 
-    if (index + batchSize < uniqueTickers.length) {
-      await sleep(200);
+  return { success: true, data: { succeeded, failed } };
+}
+
+export async function fetchMetricsBatched(
+  tickers: string[],
+  batchSize = 10,
+): Promise<FinnhubResult<BatchMetricsResult>> {
+  if (!getFinnhubApiKey()) {
+    return { success: false, error: MISSING_API_KEY_ERROR };
+  }
+
+  const uniqueTickers = [...new Set(tickers.map(normalizeTicker))];
+  const succeeded: BatchMetricsResult["succeeded"] = [];
+  const failed: BatchMetricsResult["failed"] = [];
+
+  for (let index = 0; index < uniqueTickers.length; index += batchSize) {
+    const batch = uniqueTickers.slice(index, index + batchSize);
+    const results = await Promise.all(
+      batch.map(async (symbol): Promise<MetricsResult> => {
+        const result = await fetchMetrics(symbol);
+        if (!result.success) {
+          return { success: false, ticker: symbol, error: result.error };
+        }
+
+        return {
+          success: true,
+          ticker: symbol,
+          peRatio: result.data.peRatio,
+          dividendYield: result.data.dividendYield,
+        };
+      }),
+    );
+
+    for (const result of results) {
+      if (result.success) {
+        succeeded.push({
+          ticker: result.ticker,
+          peRatio: result.peRatio,
+          dividendYield: result.dividendYield,
+        });
+      } else {
+        failed.push({ ticker: result.ticker, error: result.error });
+      }
     }
   }
 

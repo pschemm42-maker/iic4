@@ -8,7 +8,7 @@ import {
   earliestPurchaseDate,
 } from "@/lib/portfolio/aggregate";
 import { formatSupabaseNetworkError } from "@/lib/env";
-import { fetchQuotesBatched } from "@/lib/market/finnhub";
+import { fetchMetricsBatched, fetchQuotesBatched } from "@/lib/market/finnhub";
 import { createClient } from "@/lib/supabase/server";
 import type {
   PortfolioHolding,
@@ -807,16 +807,26 @@ export async function refreshAllQuotes(): Promise<PortfolioActionResult> {
     return { success: false, error: "No holdings to refresh." };
   }
 
-  const quotesResult = await fetchQuotesBatched(
-    holdingsResult.data.map((holding) => holding.ticker),
-  );
+  const tickers = holdingsResult.data.map((holding) => holding.ticker);
+
+  const quotesResult = await fetchQuotesBatched(tickers);
 
   if (!quotesResult.success) {
     return { success: false, error: quotesResult.error };
   }
 
+  const metricsResult = await fetchMetricsBatched(tickers);
+
+  if (!metricsResult.success) {
+    return { success: false, error: metricsResult.error };
+  }
+
   const priceByTicker = new Map(
     quotesResult.data.succeeded.map((quote) => [quote.ticker, quote.currentPrice]),
+  );
+
+  const metricsByTicker = new Map(
+    metricsResult.data.succeeded.map((metrics) => [metrics.ticker, metrics]),
   );
 
   try {
@@ -824,13 +834,26 @@ export async function refreshAllQuotes(): Promise<PortfolioActionResult> {
 
     for (const holding of holdingsResult.data) {
       const currentPrice = priceByTicker.get(holding.ticker);
-      if (currentPrice === undefined) {
+      const metrics = metricsByTicker.get(holding.ticker);
+
+      if (currentPrice === undefined && metrics === undefined) {
         continue;
+      }
+
+      const updates: Record<string, number | null> = {};
+
+      if (currentPrice !== undefined) {
+        updates.current_price = currentPrice;
+      }
+
+      if (metrics !== undefined) {
+        updates.pe_ratio = metrics.peRatio;
+        updates.dividend_yield = metrics.dividendYield;
       }
 
       const { error } = await supabase
         .from("portfolio_holdings")
-        .update({ current_price: currentPrice })
+        .update(updates)
         .eq("id", holding.id);
 
       if (error) {
@@ -840,23 +863,36 @@ export async function refreshAllQuotes(): Promise<PortfolioActionResult> {
 
     revalidatePath("/portfolio");
 
-    const updatedCount = quotesResult.data.succeeded.length;
     const totalCount = holdingsResult.data.length;
+    const priceCount = quotesResult.data.succeeded.length;
+    const metricsCount = metricsResult.data.succeeded.length;
+    const parts: string[] = [
+      `Updated prices for ${priceCount} of ${totalCount} holdings`,
+      `P/E and dividend yield for ${metricsCount} of ${totalCount} holdings`,
+    ];
 
+    const failures: string[] = [];
     if (quotesResult.data.failed.length > 0) {
-      const failedTickers = quotesResult.data.failed
-        .map((failure) => failure.ticker)
-        .join(", ");
+      failures.push(
+        `prices: ${quotesResult.data.failed.map((failure) => failure.ticker).join(", ")}`,
+      );
+    }
+    if (metricsResult.data.failed.length > 0) {
+      failures.push(
+        `metrics: ${metricsResult.data.failed.map((failure) => failure.ticker).join(", ")}`,
+      );
+    }
 
+    if (failures.length > 0) {
       return {
         success: true,
-        message: `Updated ${updatedCount} of ${totalCount} prices. Failed: ${failedTickers}.`,
+        message: `${parts.join(". ")}. Failed ${failures.join("; ")}.`,
       };
     }
 
     return {
       success: true,
-      message: `Updated prices for all ${updatedCount} holdings.`,
+      message: `${parts.join(". ")}.`,
     };
   } catch (error) {
     return {

@@ -13,7 +13,9 @@ type SuggestionUpvoteControlProps = {
   voteCount: number;
   hasVoted: boolean;
   disabled?: boolean;
-  onVoteChanged: (voted: boolean) => void;
+  readOnly?: boolean;
+  mode?: "live" | "meeting";
+  onVoteChanged?: (voted: boolean) => void;
 };
 
 function ThumbsUpOutlineIcon() {
@@ -54,6 +56,8 @@ export function SuggestionUpvoteControl({
   voteCount,
   hasVoted,
   disabled = false,
+  readOnly = false,
+  mode = "live",
   onVoteChanged,
 }: SuggestionUpvoteControlProps) {
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +65,7 @@ export function SuggestionUpvoteControl({
   const [isPending, startTransition] = useTransition();
 
   function handleToggleVote() {
-    if (disabled || isPending) {
+    if (disabled || isPending || readOnly) {
       return;
     }
 
@@ -73,7 +77,7 @@ export function SuggestionUpvoteControl({
         : await upvoteStockSuggestion(suggestionId);
 
       if (result.success) {
-        onVoteChanged(!hasVoted);
+        onVoteChanged?.(!hasVoted);
         return;
       }
 
@@ -87,6 +91,7 @@ export function SuggestionUpvoteControl({
         <VoteListDialog
           suggestionId={suggestionId}
           ticker={ticker}
+          mode={mode}
           onClose={() => setShowVoteList(false)}
         />
       ) : null}
@@ -95,26 +100,35 @@ export function SuggestionUpvoteControl({
           Upvotes
         </p>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleToggleVote}
-            disabled={disabled || isPending}
-            aria-label={
-              hasVoted ? `Remove upvote for ${ticker}` : `Upvote ${ticker}`
-            }
-            title={
-              hasVoted
-                ? "Click to remove your upvote"
-                : "Upvote this suggestion"
-            }
-            className={`rounded-lg border p-2 transition-colors disabled:cursor-not-allowed ${
-              hasVoted
-                ? "border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-950/50"
-                : "border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            } disabled:opacity-60`}
-          >
-            {hasVoted ? <ThumbsUpFilledIcon /> : <ThumbsUpOutlineIcon />}
-          </button>
+          {readOnly ? (
+            <div
+              className="rounded-lg border border-zinc-200 bg-zinc-50 p-2 text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900/50"
+              aria-hidden="true"
+            >
+              <ThumbsUpOutlineIcon />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleToggleVote}
+              disabled={disabled || isPending}
+              aria-label={
+                hasVoted ? `Remove upvote for ${ticker}` : `Upvote ${ticker}`
+              }
+              title={
+                hasVoted
+                  ? "Click to remove your upvote"
+                  : "Upvote this suggestion"
+              }
+              className={`rounded-lg border p-2 transition-colors disabled:cursor-not-allowed ${
+                hasVoted
+                  ? "border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-950/50"
+                  : "border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              } disabled:opacity-60`}
+            >
+              {hasVoted ? <ThumbsUpFilledIcon /> : <ThumbsUpOutlineIcon />}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowVoteList(true)}

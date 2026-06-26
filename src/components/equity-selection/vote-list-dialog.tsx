@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { listVotesForSuggestion } from "@/lib/equity-selection/actions";
+import { listVotesForMeetingSuggestion } from "@/lib/equity-selection/meeting-actions";
 import type { StockSuggestionVote } from "@/lib/types/equity-selection";
 
 type VoteListDialogProps = {
   suggestionId: string;
   ticker: string;
+  mode?: "live" | "meeting";
   onClose: () => void;
 };
 
@@ -20,6 +22,7 @@ function formatVoteDate(value: string) {
 export function VoteListDialog({
   suggestionId,
   ticker,
+  mode = "live",
   onClose,
 }: VoteListDialogProps) {
   const [votes, setVotes] = useState<StockSuggestionVote[] | null>(null);
@@ -33,7 +36,10 @@ export function VoteListDialog({
       setIsLoading(true);
       setError(null);
 
-      const result = await listVotesForSuggestion(suggestionId);
+      const result =
+        mode === "meeting"
+          ? await listVotesForMeetingSuggestion(suggestionId)
+          : await listVotesForSuggestion(suggestionId);
 
       if (cancelled) {
         return;
@@ -53,7 +59,7 @@ export function VoteListDialog({
     return () => {
       cancelled = true;
     };
-  }, [suggestionId]);
+  }, [suggestionId, mode]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {

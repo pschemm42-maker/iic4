@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useTransition } from "react";
 import { ResearchModal } from "@/components/equity-selection/research-modal";
 import { SuggestionUpvoteControl } from "@/components/equity-selection/suggestion-upvote-control";
@@ -188,6 +187,23 @@ function compositeScoreBadgeClassName(score: number | null | undefined) {
   return "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300";
 }
 
+function RecommendationReasonDisplay({
+  suggestion,
+}: {
+  suggestion: StockSuggestion;
+}) {
+  return (
+    <div className="grid h-full grid-rows-[auto_1fr] gap-2 p-3.5 text-sm">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">
+        Member recommendation
+      </span>
+      <p className="min-h-[5.5rem] whitespace-pre-wrap rounded-lg border border-violet-200 bg-violet-50/40 px-2.5 py-2 text-sm leading-5 text-zinc-950 dark:border-violet-900 dark:bg-violet-950/20 dark:text-zinc-50">
+        {suggestion.recommendation_reason}
+      </p>
+    </div>
+  );
+}
+
 function RecommendationReasonEditor({
   suggestion,
   disabled,
@@ -258,6 +274,7 @@ type SuggestionCardProps = {
   canDelete: boolean;
   isPending: boolean;
   accentIndex: number;
+  mode: "live" | "meeting";
   onRemove: (suggestion: StockSuggestion) => void;
   onLaunchResearch: (suggestion: StockSuggestion) => void;
   onVoteChanged: (suggestionId: string, voted: boolean) => void;
@@ -271,10 +288,12 @@ function SuggestionCard({
   canDelete,
   isPending,
   accentIndex,
+  mode,
   onRemove,
   onLaunchResearch,
   onVoteChanged,
 }: SuggestionCardProps) {
+  const isMeeting = mode === "meeting";
   const accent = CARD_ACCENTS[accentIndex % CARD_ACCENTS.length];
 
   return (
@@ -317,11 +336,15 @@ function SuggestionCard({
           <StockInfoColumn suggestion={suggestion} accent={accent} />
 
           <div className="min-w-0 bg-white dark:bg-zinc-900">
-            <RecommendationReasonEditor
-              key={`${suggestion.id}-${suggestion.recommendation_reason}`}
-              suggestion={suggestion}
-              disabled={isPending}
-            />
+            {isMeeting ? (
+              <RecommendationReasonDisplay suggestion={suggestion} />
+            ) : (
+              <RecommendationReasonEditor
+                key={`${suggestion.id}-${suggestion.recommendation_reason}`}
+                suggestion={suggestion}
+                disabled={isPending}
+              />
+            )}
           </div>
 
           <div
@@ -343,7 +366,9 @@ function SuggestionCard({
                   onClick={() => onLaunchResearch(suggestion)}
                   className="mt-2.5 w-full rounded-lg border border-teal-300 bg-white px-3 py-1.5 text-xs font-semibold text-teal-800 shadow-sm transition-colors hover:bg-teal-50 disabled:opacity-60 dark:border-teal-800 dark:bg-zinc-900 dark:text-teal-300 dark:hover:bg-teal-950/30"
                 >
-                  {compositeScore !== null ? "View research" : "Launch research"}
+                  {isMeeting || compositeScore !== null
+                    ? "View research"
+                    : "Launch research"}
                 </button>
               </div>
 
@@ -353,6 +378,8 @@ function SuggestionCard({
                 voteCount={voteCount}
                 hasVoted={hasVoted}
                 disabled={isPending}
+                readOnly={isMeeting}
+                mode={mode}
                 onVoteChanged={(voted) => onVoteChanged(suggestion.id, voted)}
               />
             </div>
@@ -365,15 +392,18 @@ function SuggestionCard({
 
 type StockSuggestionPanelProps = {
   suggestions: StockSuggestion[];
-  currentUserId: string;
-  isAdministrator: boolean;
+  currentUserId?: string;
+  isAdministrator?: boolean;
+  mode?: "live" | "meeting";
 };
 
 export function StockSuggestionPanel({
   suggestions,
-  currentUserId,
-  isAdministrator,
+  currentUserId = "",
+  isAdministrator = false,
+  mode = "live",
 }: StockSuggestionPanelProps) {
+  const isMeeting = mode === "meeting";
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [researchSuggestion, setResearchSuggestion] =
@@ -464,83 +494,54 @@ export function StockSuggestionPanel({
             ...researchSuggestion,
             research_composite_score: getCompositeScore(researchSuggestion),
           }}
+          mode={mode}
           onClose={() => setResearchSuggestion(null)}
-          onResearchCaptured={handleResearchCaptured}
+          onResearchCaptured={isMeeting ? undefined : handleResearchCaptured}
         />
       ) : null}
       <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="relative border-b border-white/10 bg-brand-navy px-4 py-3 text-white lg:px-5">
-          <div className="brand-gradient-glow absolute inset-0" aria-hidden="true" />
-          <div className="relative z-10">
-            <Link
-              href="/dashboard"
-              className="text-xs font-medium text-brand-teal-light transition-colors hover:text-teal-200"
-            >
-              ← Back to dashboard
-            </Link>
-            <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <div>
-                <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-amber-300/90">
-                  Member collaboration
-                </p>
-                <h1 className="text-xl font-semibold tracking-tight">
-                  Equity Selection
-                </h1>
-              </div>
-              {suggestions.length > 0 ? (
-                <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs tabular-nums text-slate-200">
-                  {suggestions.length}{" "}
-                  {suggestions.length === 1 ? "suggestion" : "suggestions"}
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-1 text-sm leading-5 text-slate-300">
-              Submit a ticker with your recommendation, then review club theses
-              and launch research.
-            </p>
-          </div>
-        </div>
-
-        <form
-          id="stock-suggestion-form"
-          action={handleSubmit}
-          className="grid gap-3 border-b border-zinc-200 bg-zinc-50/80 px-4 py-4 lg:grid-cols-[minmax(0,10rem)_1fr_auto] lg:items-end lg:gap-4 lg:px-5 dark:border-zinc-800 dark:bg-zinc-950/40"
-        >
-          <label className="grid gap-1 text-sm">
-            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
-              Stock symbol
-            </span>
-            <input
-              name="ticker"
-              type="text"
-              required
-              placeholder="AAPL"
-              className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 uppercase text-zinc-950 outline-none ring-teal-600 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
-            />
-          </label>
-
-          <label className="grid gap-1 text-sm">
-            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
-              Member recommendation reason
-            </span>
-            <textarea
-              name="recommendationReason"
-              required
-              rows={2}
-              maxLength={500}
-              placeholder="Why should the club consider this stock?"
-              className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm text-zinc-950 outline-none ring-teal-600 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
-            />
-          </label>
-
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-60 lg:mb-0.5"
+        {!isMeeting ? (
+          <form
+            id="stock-suggestion-form"
+            action={handleSubmit}
+            className="grid gap-3 border-b border-zinc-200 bg-zinc-50/80 px-4 py-4 lg:grid-cols-[minmax(0,10rem)_1fr_auto] lg:items-end lg:gap-4 lg:px-5 dark:border-zinc-800 dark:bg-zinc-950/40"
           >
-            {isPending ? "Submitting..." : "Submit suggestion"}
-          </button>
-        </form>
+            <label className="grid gap-1 text-sm">
+              <span className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+                Stock symbol
+              </span>
+              <input
+                name="ticker"
+                type="text"
+                required
+                placeholder="AAPL"
+                className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 uppercase text-zinc-950 outline-none ring-teal-600 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+              />
+            </label>
+
+            <label className="grid gap-1 text-sm">
+              <span className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+                Member recommendation reason
+              </span>
+              <textarea
+                name="recommendationReason"
+                required
+                rows={2}
+                maxLength={500}
+                placeholder="Why should the club consider this stock?"
+                className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm text-zinc-950 outline-none ring-teal-600 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={isPending}
+              className="rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-60 lg:mb-0.5"
+            >
+              {isPending ? "Submitting..." : "Submit suggestion"}
+            </button>
+          </form>
+        ) : null}
 
         {error ? (
           <p className="mx-4 mt-2 rounded-lg bg-red-50 px-3 py-1.5 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300 lg:mx-5">
@@ -550,7 +551,9 @@ export function StockSuggestionPanel({
 
         {suggestions.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-zinc-600 dark:text-zinc-400 lg:px-5">
-            No stock suggestions yet. Submit a ticker above to start the list.
+            {isMeeting
+              ? "No suggestions were saved for this meeting."
+              : "No stock suggestions yet. Submit a ticker above to start the list."}
           </p>
         ) : (
           <ul className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2 xl:gap-5 lg:p-5">
@@ -561,9 +564,10 @@ export function StockSuggestionPanel({
                 compositeScore={getCompositeScore(suggestion)}
                 voteCount={getVoteCount(suggestion)}
                 hasVoted={getHasVoted(suggestion)}
-                canDelete={canDelete(suggestion)}
+                canDelete={!isMeeting && canDelete(suggestion)}
                 isPending={isPending}
                 accentIndex={index}
+                mode={mode}
                 onRemove={handleRemove}
                 onLaunchResearch={setResearchSuggestion}
                 onVoteChanged={handleVoteChanged}

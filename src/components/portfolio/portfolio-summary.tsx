@@ -1,7 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { setClubCash } from "@/lib/portfolio/actions";
+import { updateSnapshotClubCash } from "@/lib/portfolio/snapshot-actions";
 import {
   calculatePortfolioSummary,
   formatCurrency,
@@ -14,6 +16,7 @@ type PortfolioSummaryCardsProps = {
   holdings: PortfolioHoldingWithMetrics[];
   clubCash?: number;
   isAdministrator?: boolean;
+  snapshotId?: string;
 };
 
 type StatCellProps = {
@@ -40,9 +43,11 @@ function StatCell({ label, value, valueClassName = "" }: StatCellProps) {
 type CashCellProps = {
   currentCash: number;
   isAdministrator: boolean;
+  snapshotId?: string;
 };
 
-function CashCell({ currentCash, isAdministrator }: CashCellProps) {
+function CashCell({ currentCash, isAdministrator, snapshotId }: CashCellProps) {
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [inputValue, setInputValue] = useState(String(currentCash));
   const [error, setError] = useState<string | null>(null);
@@ -56,9 +61,15 @@ function CashCell({ currentCash, isAdministrator }: CashCellProps) {
     }
     setError(null);
     startTransition(async () => {
-      const result = await setClubCash(parsed);
+      const result = snapshotId
+        ? await updateSnapshotClubCash(snapshotId, parsed)
+        : await setClubCash(parsed);
+
       if (result.success) {
         setEditing(false);
+        if (snapshotId) {
+          router.refresh();
+        }
       } else {
         setError(result.error);
       }
@@ -137,6 +148,7 @@ export function PortfolioSummaryCards({
   holdings,
   clubCash = 0,
   isAdministrator = false,
+  snapshotId,
 }: PortfolioSummaryCardsProps) {
   const summary = calculatePortfolioSummary(holdings, clubCash);
 
@@ -170,7 +182,11 @@ export function PortfolioSummaryCards({
           />
         ))}
 
-        <CashCell currentCash={clubCash} isAdministrator={isAdministrator} />
+        <CashCell
+          currentCash={clubCash}
+          isAdministrator={isAdministrator}
+          snapshotId={snapshotId}
+        />
 
         {/* Club Portfolio Equity — right-anchored, bold navy */}
         <div className="ml-auto flex flex-col justify-center bg-brand-navy px-6 py-3">

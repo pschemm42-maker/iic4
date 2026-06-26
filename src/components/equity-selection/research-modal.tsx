@@ -9,12 +9,14 @@ import {
   captureStockResearch,
   getStockSuggestionResearch,
 } from "@/lib/equity-selection/actions";
+import { getMeetingSuggestionResearch } from "@/lib/equity-selection/meeting-actions";
 import { formatNumber } from "@/lib/portfolio/metrics";
 import type { StockSuggestion } from "@/lib/types/equity-selection";
 import { type StockSuggestionResearch } from "@/lib/types/equity-selection";
 
 type ResearchModalProps = {
   suggestion: StockSuggestion;
+  mode?: "live" | "meeting";
   onClose: () => void;
   onResearchCaptured?: (suggestionId: string, compositeScore: number) => void;
 };
@@ -34,9 +36,11 @@ function compositeScoreColor(score: number) {
 
 export function ResearchModal({
   suggestion,
+  mode = "live",
   onClose,
   onResearchCaptured,
 }: ResearchModalProps) {
+  const isMeeting = mode === "meeting";
   const router = useRouter();
   const [research, setResearch] = useState<StockSuggestionResearch | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +54,9 @@ export function ResearchModal({
       setIsLoading(true);
       setError(null);
 
-      const result = await getStockSuggestionResearch(suggestion.id);
+      const result = isMeeting
+        ? await getMeetingSuggestionResearch(suggestion.id)
+        : await getStockSuggestionResearch(suggestion.id);
 
       if (cancelled) {
         return;
@@ -70,7 +76,7 @@ export function ResearchModal({
     return () => {
       cancelled = true;
     };
-  }, [suggestion.id]);
+  }, [suggestion.id, isMeeting]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -149,18 +155,20 @@ export function ResearchModal({
               </h2>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={handleCaptureResearch}
-                disabled={isPending || isLoading}
-                className="rounded-md bg-brand-teal px-3 py-1 text-[13px] font-medium text-white transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isPending
-                  ? "Capturing…"
-                  : research
-                    ? "Recapture"
-                    : "Capture"}
-              </button>
+              {!isMeeting ? (
+                <button
+                  type="button"
+                  onClick={handleCaptureResearch}
+                  disabled={isPending || isLoading}
+                  className="rounded-md bg-brand-teal px-3 py-1 text-[13px] font-medium text-white transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isPending
+                    ? "Capturing…"
+                    : research
+                      ? "Recapture"
+                      : "Capture"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={onClose}
@@ -232,18 +240,20 @@ export function ResearchModal({
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
               <p className="max-w-md text-sm text-zinc-500 dark:text-zinc-400">
-                No research captured yet. Capture to compute statistical
-                category scores, sell-side consensus, and Yahoo Finance targets,
-                trends, and news.
+                {isMeeting
+                  ? "No research was captured for this suggestion at the time of the meeting."
+                  : "No research captured yet. Capture to compute statistical category scores, sell-side consensus, and Yahoo Finance targets, trends, and news."}
               </p>
-              <button
-                type="button"
-                onClick={handleCaptureResearch}
-                disabled={isPending}
-                className="rounded-md bg-brand-teal px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-teal-400 disabled:opacity-60"
-              >
-                Capture research
-              </button>
+              {!isMeeting ? (
+                <button
+                  type="button"
+                  onClick={handleCaptureResearch}
+                  disabled={isPending}
+                  className="rounded-md bg-brand-teal px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-teal-400 disabled:opacity-60"
+                >
+                  Capture research
+                </button>
+              ) : null}
             </div>
           )}
         </div>

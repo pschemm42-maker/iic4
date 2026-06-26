@@ -65,6 +65,8 @@ export default async function PortfolioSnapshotPage({
           <PortfolioSummaryCards
             holdings={holdings}
             clubCash={Number(snapshot.club_cash ?? 0)}
+            isAdministrator={canManage}
+            snapshotId={snapshot.id}
           />
           <PortfolioTable
             holdings={holdings}

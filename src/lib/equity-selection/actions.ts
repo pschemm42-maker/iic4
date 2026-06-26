@@ -305,9 +305,10 @@ export async function captureStockResearch(
       return { success: false, error: "Suggestion not found." };
     }
 
-    const researchResult = await captureStockResearchWithGemini(
-      suggestion as StockSuggestion,
-    );
+    const [researchResult, marketResult] = await Promise.all([
+      captureStockResearchWithGemini(suggestion as StockSuggestion),
+      fetchHoldingStats(suggestion.ticker),
+    ]);
 
     if (!researchResult.success) {
       return researchResult;
@@ -361,6 +362,26 @@ export async function captureStockResearch(
         success: false,
         error: formatSupabaseNetworkError(suggestionUpdateError),
       };
+    }
+
+    if (marketResult.success) {
+      const market = marketResult.data;
+      const { error: marketUpdateError } = await supabase.rpc(
+        "update_stock_suggestion_market_data",
+        {
+          p_suggestion_id: suggestionId,
+          p_current_price: market.currentPrice,
+          p_pe_ratio: market.peRatio,
+          p_dividend_yield: market.dividendYield,
+        },
+      );
+
+      if (marketUpdateError) {
+        return {
+          success: false,
+          error: formatSupabaseNetworkError(marketUpdateError),
+        };
+      }
     }
 
     revalidatePath("/equity-selection");
